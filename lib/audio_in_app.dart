@@ -4,6 +4,8 @@ import 'dart:developer';
 import 'package:audio_in_app/src/audio_in_app_type.dart';
 import 'package:audioplayers/audioplayers.dart';
 
+export 'package:audio_in_app/src/audio_in_app_type.dart';
+
 class AudioInApp {
   static const _NameLog = 'AudioInApp';
 
@@ -11,6 +13,8 @@ class AudioInApp {
   Map<String, dynamic> _audioCacheMap = new Map<String, dynamic>();
   List<String> _audioBackgroundCacheList = <String>[];
   Map<String, dynamic> _audioBackgroundCacheMap = new Map<String, dynamic>();
+
+
 
 
 
