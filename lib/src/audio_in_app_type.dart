@@ -1,4 +1,0 @@
-enum AudioInAppType {
-  determined,
-  background
-}
