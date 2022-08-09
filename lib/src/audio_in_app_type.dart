@@ -1,4 +1,4 @@
-library audio_in_app;
+library audio_in_app_type;
 
 enum AudioInAppType {
   determined,
