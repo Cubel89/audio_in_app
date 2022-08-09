@@ -1,13 +1,15 @@
 library audio_in_app;
 
 import 'dart:developer';
+import 'package:audio_in_app/audio_in_app.dart';
+import 'package:audio_in_app/src/audio_in_app_type.dart';
 import 'package:audioplayers/audioplayers.dart';
 
 
 
 class AudioInApp {
   static const _NameLog = 'AudioInApp';
-
+  late final AudioInAppType audioInAppType;
 
   Map<String, dynamic> _audioCacheType = new Map<String, dynamic>();
   Map<String, dynamic> _audioCacheMap = new Map<String, dynamic>();
