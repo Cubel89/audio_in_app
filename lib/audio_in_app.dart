@@ -1,2 +1,2 @@
 export 'src/source.dart';
-export 'src/audio_in_app_type.dart';
+export 'package:audio_in_app/src/audio_in_app_type.dart';
