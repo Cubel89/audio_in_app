@@ -9,16 +9,17 @@ import 'package:audioplayers/audioplayers.dart';
 
 class AudioInApp {
   static const _NameLog = 'AudioInApp';
-  late final AudioInAppType audioInAppType;
+
 
   Map<String, dynamic> _audioCacheType = new Map<String, dynamic>();
   Map<String, dynamic> _audioCacheMap = new Map<String, dynamic>();
   List<String> _audioBackgroundCacheList = <String>[];
   Map<String, dynamic> _audioBackgroundCacheMap = new Map<String, dynamic>();
 
+  Type _audioInAppType = AudioInAppType;
 
 
-
+  Type get audioInAppType => _audioInAppType;
 
   Future<bool> createNewAudioCache({
     required String playerId,
