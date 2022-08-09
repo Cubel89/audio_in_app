@@ -16,8 +16,6 @@ class AudioInApp {
   List<String> _audioBackgroundCacheList = <String>[];
   Map<String, dynamic> _audioBackgroundCacheMap = new Map<String, dynamic>();
 
-  static Type get audioInAppType => AudioInAppType;
-
   Future<bool> createNewAudioCache({
     required String playerId,
     required String route,
