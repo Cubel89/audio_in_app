@@ -70,14 +70,17 @@ class AudioInApp {
   }
 
   Future<void> _playDetermined(String playerId) async {
+    log('_playDetermined ${playerId}', name: _NameLog);
     await _audioCacheMap[playerId].resume();
+    log('FIN _playDetermined ${playerId}', name: _NameLog);
   }
 
   Future<void> _playBackground(String playerId) async {
     _audioBackgroundCacheList.forEach((String itemPlayerId) async {
       await _audioBackgroundCacheMap[itemPlayerId].stop();
     });
-
+    log('_playBackground ${playerId}', name: _NameLog);
     await _audioBackgroundCacheMap[playerId].resume();
+    log('FIN _playBackground ${playerId}', name: _NameLog);
   }
 }
