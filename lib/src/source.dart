@@ -22,27 +22,40 @@ class AudioInApp {
     required AudioInAppType audioInAppType
   }) async{
     try{
+      log('### A1', name: _NameLog);
       final AudioPlayer _audio = AudioPlayer(playerId: playerId);
+      log('### A2', name: _NameLog);
       await _audio.setVolume(0.0);
+      log('### A3', name: _NameLog);
       await _audio.setSource(AssetSource(route));
+      log('### A4', name: _NameLog);
       await _audio.resume();
       await _audio.stop();
       await _audio.setVolume(1.0);
+      log('### A5', name: _NameLog);
       if(audioInAppType == AudioInAppType.determined){
+        log('### B1', name: _NameLog);
         await _audio.setReleaseMode(ReleaseMode.release);
-        await _audio.setPlayerMode(PlayerMode.lowLatency);
+        log('### B2', name: _NameLog);
+        //await _audio.setPlayerMode(PlayerMode.lowLatency);
+        log('### B3', name: _NameLog);
         _audioCacheMap[playerId] = _audio;
       }
       if(audioInAppType == AudioInAppType.background){
+        log('### C1', name: _NameLog);
         await _audio.setReleaseMode(ReleaseMode.loop);
-        await _audio.setPlayerMode(PlayerMode.mediaPlayer);
+        log('### C2', name: _NameLog);
+        //await _audio.setPlayerMode(PlayerMode.mediaPlayer);
+        log('### C3', name: _NameLog);
         _audioBackgroundCacheMap[playerId] = _audio;
         if(!_audioBackgroundCacheList.contains(playerId)){
+          log('### C4', name: _NameLog);
           _audioBackgroundCacheList.add(playerId);
         }
       }
-
+      log('### A6', name: _NameLog);
       _audioCacheType[playerId] = audioInAppType;
+      log('### A7', name: _NameLog);
     } catch(e){
       log('ERROR', name: _NameLog);
       log(e.toString(), name: _NameLog);
@@ -71,6 +84,13 @@ class AudioInApp {
 
   Future<void> _playDetermined(String playerId) async {
     log('_playDetermined ${playerId}', name: _NameLog);
+    log('State ${_audioCacheMap[playerId].state}', name: _NameLog);
+    if(_audioCacheMap[playerId].state == PlayerState.playing){
+      await _audioCacheMap[playerId].stop();
+    }
+    /*if(_audioCacheMap[playerId].isPlaying()){
+      _audioCacheMap[playerId].stop();
+    }*/
     await _audioCacheMap[playerId].resume();
     log('FIN _playDetermined ${playerId}', name: _NameLog);
   }
