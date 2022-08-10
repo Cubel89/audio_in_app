@@ -20,10 +20,15 @@ class _MainActivityState extends State<MainActivity> {
     Future.delayed(Duration(milliseconds: 3000)).then((value) =>   reproducir2());
     Future.delayed(Duration(milliseconds: 4000)).then((value) =>   reproducir2());
     Future.delayed(Duration(milliseconds: 4500)).then((value) =>   reproducir2());
+    Future.delayed(Duration(milliseconds: 5500)).then((value) =>   deleteBack());
+    Future.delayed(Duration(milliseconds: 6500)).then((value) =>   reproducir());
   }
 
   Future<void> reproducir() async {
     await _audioInApp.play(playerId: 'intro');
+  }
+  Future<void> deleteBack() async {
+    await _audioInApp.removeAudio('intro');
   }
   Future<void> cargarCache() async {
     log(_audioInApp.audioCacheMap.toString(), name: 'LoadingActivity');
