@@ -1,3 +1,6 @@
+import 'dart:developer';
+
+import 'package:audio_in_app/audio_in_app.dart';
 import 'package:flutter/material.dart';
 
 class LoadingActivity extends StatefulWidget {
@@ -6,6 +9,8 @@ class LoadingActivity extends StatefulWidget {
 }
 
 class _LoadingActivityState extends State<LoadingActivity> {
+  AudioInApp _audioInApp = AudioInApp();
+
   @override
   void initState() {
     super.initState();
@@ -22,7 +27,12 @@ class _LoadingActivityState extends State<LoadingActivity> {
   }
 
 
-  void goToMain(){
+  Future<void> goToMain() async {
+    //_audioInApp.initialize();
+    await _audioInApp.createNewAudioCache(playerId: 'intro', route: 'audio/intro_2.wav', audioInAppType: AudioInAppType.background);
+    await _audioInApp.createNewAudioCache(playerId: 'button', route: 'audio/button.wav', audioInAppType: AudioInAppType.determined);
+    log(_audioInApp.audioCacheMap.toString(), name: 'LoadingActivity');
+
     Navigator.pushReplacementNamed(context, 'main');
   }
 }

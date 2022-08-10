@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:audio_in_app/audio_in_app.dart';
 import 'package:flutter/material.dart';
 
@@ -24,8 +26,9 @@ class _MainActivityState extends State<MainActivity> {
     await _audioInApp.play(playerId: 'intro');
   }
   Future<void> cargarCache() async {
-    await _audioInApp.createNewAudioCache(playerId: 'intro', route: 'audio/intro_2.wav', audioInAppType: AudioInAppType.background);
-    await _audioInApp.createNewAudioCache(playerId: 'button', route: 'audio/button.wav', audioInAppType: AudioInAppType.determined);
+    log(_audioInApp.audioCacheMap.toString(), name: 'LoadingActivity');
+    /*await _audioInApp.createNewAudioCache(playerId: 'intro', route: 'audio/intro_2.wav', audioInAppType: AudioInAppType.background);
+    await _audioInApp.createNewAudioCache(playerId: 'button', route: 'audio/button.wav', audioInAppType: AudioInAppType.determined);*/
     reproducir();
   }
 

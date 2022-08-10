@@ -4,10 +4,66 @@ import 'dart:developer';
 import 'package:audio_in_app/audio_in_app.dart';
 import 'package:audio_in_app/src/audio_in_app_type.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/material.dart';
 
 
 
-class AudioInApp {
+class AudioInApp with WidgetsBindingObserver {
+  bool _isRegistered = false;
+
+  /// Registers a [WidgetsBinding] observer.
+  ///
+  /// This must be called for auto-pause and resume to work properly.
+  void initialize() {
+    if (_isRegistered) {
+      return;
+    }
+    _isRegistered = true;
+    _ambiguate(WidgetsBinding.instance)?.addObserver(this);
+  }
+
+  /// Dispose the [WidgetsBinding] observer.
+  void dispose() {
+    //audioPlayer.dispose();
+    if (!_isRegistered) {
+      return;
+    }
+    _ambiguate(WidgetsBinding.instance)?.removeObserver(this);
+    _isRegistered = false;
+  }
+
+  //Singleton
+  static final AudioInApp _singletonAudioInApp = new AudioInApp._internal();
+  factory AudioInApp() {
+    return _singletonAudioInApp;
+  }
+  AudioInApp._internal();
+
+  @override
+  Future<void> didChangeAppLifecycleState(AppLifecycleState state) async {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.paused) {
+      log('Entra en pausa', name: _NameLog);
+      // went to Background
+      _audioBackgroundCacheList.forEach((String itemPlayerId) async {
+        if(_audioBackgroundCacheMap[itemPlayerId].state == PlayerState.playing){
+          await _audioBackgroundCacheMap[itemPlayerId].pause();
+          _audioBackgroundPlaying['playerID'] = itemPlayerId;
+        }
+      });
+    }
+    if (state == AppLifecycleState.resumed) {
+      log('Entra en play', name: _NameLog);
+      // came back to Foreground
+      if(_audioBackgroundPlaying['playerID'] != null){
+        await _audioBackgroundCacheMap[_audioBackgroundPlaying['playerID']].resume();
+      }
+    }
+  }
+
+
+
+
   static const _NameLog = 'AudioInApp';
 
 
@@ -15,12 +71,14 @@ class AudioInApp {
   Map<String, dynamic> _audioCacheMap = new Map<String, dynamic>();
   List<String> _audioBackgroundCacheList = <String>[];
   Map<String, dynamic> _audioBackgroundCacheMap = new Map<String, dynamic>();
+  Map<String, dynamic> _audioBackgroundPlaying = {};
 
   Future<bool> createNewAudioCache({
     required String playerId,
     required String route,
     required AudioInAppType audioInAppType
   }) async{
+    initialize();
     try{
       log('### A1', name: _NameLog);
       final AudioPlayer _audio = AudioPlayer(playerId: playerId);
@@ -103,4 +161,16 @@ class AudioInApp {
     await _audioBackgroundCacheMap[playerId].resume();
     log('FIN _playBackground ${playerId}', name: _NameLog);
   }
+
+  Map<String, dynamic> get audioCacheMap => _audioCacheMap;
 }
+
+/// This allows a value of type T or T?
+/// to be treated as a value of type T?.
+///
+/// We use this so that APIs that have become
+/// non-nullable can still be used with `!` and `?`
+/// to support older versions of the API as well.
+///
+/// See more: https://docs.flutter.dev/development/tools/sdk/release-notes/release-notes-3.0.0
+T? _ambiguate<T>(T? value) => value;
