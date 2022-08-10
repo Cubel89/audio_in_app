@@ -9,12 +9,22 @@ import 'package:flutter/material.dart';
 
 
 class AudioInApp with WidgetsBindingObserver {
+  static const _NameLog = 'AudioInApp';
   bool _isRegistered = false;
+  bool _audioPermission = true;
+
+  Map<String, dynamic> _audioCacheType = new Map<String, dynamic>();
+  Map<String, dynamic> _audioCacheMap = new Map<String, dynamic>();
+  List<String> _audioBackgroundCacheList = <String>[];
+  Map<String, dynamic> _audioBackgroundCacheMap = new Map<String, dynamic>();
+  Map<String, dynamic> _audioBackgroundPlaying = {};
+
+
 
   /// Registers a [WidgetsBinding] observer.
   ///
   /// This must be called for auto-pause and resume to work properly.
-  void initialize() {
+  void _initialize() {
     if (_isRegistered) {
       return;
     }
@@ -45,6 +55,7 @@ class AudioInApp with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused) {
       log('Entra en pausa', name: _NameLog);
       // went to Background
+      _audioPermission = false;
       _audioBackgroundCacheList.forEach((String itemPlayerId) async {
         if(_audioBackgroundCacheMap[itemPlayerId].state == PlayerState.playing){
           await _audioBackgroundCacheMap[itemPlayerId].pause();
@@ -55,8 +66,10 @@ class AudioInApp with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       log('Entra en play', name: _NameLog);
       // came back to Foreground
+      _audioPermission = true;
       if(_audioBackgroundPlaying['playerID'] != null){
         await _audioBackgroundCacheMap[_audioBackgroundPlaying['playerID']].resume();
+        _audioBackgroundPlaying = {};
       }
     }
   }
@@ -64,21 +77,16 @@ class AudioInApp with WidgetsBindingObserver {
 
 
 
-  static const _NameLog = 'AudioInApp';
 
-
-  Map<String, dynamic> _audioCacheType = new Map<String, dynamic>();
-  Map<String, dynamic> _audioCacheMap = new Map<String, dynamic>();
-  List<String> _audioBackgroundCacheList = <String>[];
-  Map<String, dynamic> _audioBackgroundCacheMap = new Map<String, dynamic>();
-  Map<String, dynamic> _audioBackgroundPlaying = {};
-
+  /**
+   * Functions Users
+   * */
   Future<bool> createNewAudioCache({
     required String playerId,
     required String route,
     required AudioInAppType audioInAppType
   }) async{
-    initialize();
+    _initialize();
     try{
       log('### A1', name: _NameLog);
       final AudioPlayer _audio = AudioPlayer(playerId: playerId);
@@ -125,18 +133,25 @@ class AudioInApp with WidgetsBindingObserver {
   Future<bool> play({
     required String playerId,
   }) async{
-    if(_audioCacheType[playerId] == null){
-      log('ERROR', name: _NameLog);
-      log('PlayerID ${playerId} not is cached', name: _NameLog);
-      log('Call the function "createNewAudioCache"', name: _NameLog);
-      return false;
-    }
+    if(!_audioPermission) return false;
+    if(! await _checkExistCache(playerId)) return false;
     if(_audioCacheType[playerId] == AudioInAppType.background){
       _playBackground(playerId);
     }
     if(_audioCacheType[playerId] == AudioInAppType.determined){
       await _playDetermined(playerId);
     }
+    return true;
+  }
+
+  Future<bool> _checkExistCache(String playerId) async{
+    if(_audioCacheType[playerId] == null){
+      log('ERROR', name: _NameLog);
+      log('PlayerID ${playerId} not is cached', name: _NameLog);
+      log('Call the function "createNewAudioCache"', name: _NameLog);
+      return false;
+    }
+
     return true;
   }
 
@@ -163,6 +178,48 @@ class AudioInApp with WidgetsBindingObserver {
   }
 
   Map<String, dynamic> get audioCacheMap => _audioCacheMap;
+
+  Future<void> setVol(String playerId, double vol) async{
+    if(! await _checkExistCache(playerId)) return;
+
+    if(_audioCacheType[playerId] == AudioInAppType.background){
+      _audioBackgroundCacheList.forEach((String itemPlayerId) async {
+        if(itemPlayerId == playerId){
+          if(_audioBackgroundCacheMap[itemPlayerId].state == PlayerState.playing){
+            await _audioBackgroundCacheMap[itemPlayerId].pause();
+            _audioBackgroundPlaying['playerID'] = itemPlayerId;
+          }
+          _audioBackgroundCacheMap[playerId].setVolume(vol);
+
+          if(_audioBackgroundPlaying['playerID'] != null){
+            if(vol > 0) {
+              await _audioBackgroundCacheMap[_audioBackgroundPlaying['playerID']].resume();
+            }
+          }
+          _audioBackgroundPlaying = {};
+        }
+      });
+    }
+    if(_audioCacheType[playerId] == AudioInAppType.determined){
+      await _audioCacheMap[playerId].setVolume(vol);
+    }
+
+  }
+
+  Future<bool> removeAudio(String playerId) async{
+    if(!await _checkExistCache(playerId)) return false;
+    if(_audioCacheType[playerId] == AudioInAppType.background){
+      await _audioBackgroundCacheMap[playerId].dispose();
+      _audioBackgroundCacheMap.removeWhere((key, value) => key == playerId);
+    }
+    if(_audioCacheType[playerId] == AudioInAppType.determined){
+      await _audioCacheMap[playerId].dispose();
+      _audioCacheMap.removeWhere((key, value) => key == playerId);
+    }
+    _audioCacheType.removeWhere((key, value) => key == playerId);
+    _audioBackgroundCacheList.remove(playerId);
+    return true;
+  }
 }
 
 /// This allows a value of type T or T?
