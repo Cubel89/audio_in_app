@@ -29,7 +29,8 @@ class _LoadingActivityState extends State<LoadingActivity> {
 
   Future<void> goToMain() async {
     //_audioInApp.initialize();
-    await _audioInApp.createNewAudioCache(playerId: 'intro', route: 'audio/intro_2.wav', audioInAppType: AudioInAppType.background);
+    await _audioInApp.createNewAudioCache(playerId: 'intro1', route: 'audio/intro_1.wav', audioInAppType: AudioInAppType.background);
+    await _audioInApp.createNewAudioCache(playerId: 'intro2', route: 'audio/intro_2.wav', audioInAppType: AudioInAppType.background);
     await _audioInApp.createNewAudioCache(playerId: 'button', route: 'audio/button.wav', audioInAppType: AudioInAppType.determined);
     log(_audioInApp.audioCacheMap.toString(), name: 'LoadingActivity');
 

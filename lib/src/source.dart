@@ -88,40 +88,26 @@ class AudioInApp with WidgetsBindingObserver {
   }) async{
     _initialize();
     try{
-      log('### A1', name: _NameLog);
       final AudioPlayer _audio = AudioPlayer(playerId: playerId);
-      log('### A2', name: _NameLog);
       await _audio.setVolume(0.0);
-      log('### A3', name: _NameLog);
       await _audio.setSource(AssetSource(route));
-      log('### A4', name: _NameLog);
       await _audio.resume();
       await _audio.stop();
       await _audio.setVolume(1.0);
-      log('### A5', name: _NameLog);
       if(audioInAppType == AudioInAppType.determined){
-        log('### B1', name: _NameLog);
         await _audio.setReleaseMode(ReleaseMode.release);
-        log('### B2', name: _NameLog);
         //await _audio.setPlayerMode(PlayerMode.lowLatency);
-        log('### B3', name: _NameLog);
         _audioCacheMap[playerId] = _audio;
       }
       if(audioInAppType == AudioInAppType.background){
-        log('### C1', name: _NameLog);
         await _audio.setReleaseMode(ReleaseMode.loop);
-        log('### C2', name: _NameLog);
         //await _audio.setPlayerMode(PlayerMode.mediaPlayer);
-        log('### C3', name: _NameLog);
         _audioBackgroundCacheMap[playerId] = _audio;
         if(!_audioBackgroundCacheList.contains(playerId)){
-          log('### C4', name: _NameLog);
           _audioBackgroundCacheList.add(playerId);
         }
       }
-      log('### A6', name: _NameLog);
       _audioCacheType[playerId] = audioInAppType;
-      log('### A7', name: _NameLog);
     } catch(e){
       log('ERROR', name: _NameLog);
       log(e.toString(), name: _NameLog);
@@ -136,11 +122,31 @@ class AudioInApp with WidgetsBindingObserver {
     if(!_audioPermission) return false;
     if(! await _checkExistCache(playerId)) return false;
     if(_audioCacheType[playerId] == AudioInAppType.background){
-      _playBackground(playerId);
+      await _playBackground(playerId);
     }
     if(_audioCacheType[playerId] == AudioInAppType.determined){
       await _playDetermined(playerId);
     }
+    return true;
+  }
+
+  Future<bool> stop({
+    required String playerId,
+  }) async{
+    if(! await _checkExistCache(playerId)) return false;
+    if(_audioCacheType[playerId] == AudioInAppType.background){
+      await _audioBackgroundCacheMap[playerId].stop();
+    }
+    if(_audioCacheType[playerId] == AudioInAppType.determined){
+      await _audioCacheMap[playerId].stop();
+    }
+    return true;
+  }
+
+  Future<bool> stopBackgroun() async{
+    _audioBackgroundCacheList.forEach((String itemPlayerId) async {
+      await _audioBackgroundCacheMap[itemPlayerId].stop();
+    });
     return true;
   }
 

@@ -15,29 +15,20 @@ class _MainActivityState extends State<MainActivity> {
   @override
   void initState() {
     super.initState();
-    cargarCache();
-    Future.delayed(Duration(milliseconds: 1500)).then((value) =>   reproducir2());
-    Future.delayed(Duration(milliseconds: 3000)).then((value) =>   reproducir2());
-    Future.delayed(Duration(milliseconds: 4000)).then((value) =>   reproducir2());
-    Future.delayed(Duration(milliseconds: 4500)).then((value) =>   reproducir2());
-    Future.delayed(Duration(milliseconds: 5500)).then((value) =>   deleteBack());
-    Future.delayed(Duration(milliseconds: 6500)).then((value) =>   reproducir());
   }
 
-  Future<void> reproducir() async {
-    await _audioInApp.play(playerId: 'intro');
+  Future<void> play_intro_1() async {
+    await _audioInApp.play(playerId: 'intro1');
   }
-  Future<void> deleteBack() async {
-    await _audioInApp.removeAudio('intro');
+  Future<void> play_intro_2() async {
+    await _audioInApp.play(playerId: 'intro2');
   }
-  Future<void> cargarCache() async {
-    log(_audioInApp.audioCacheMap.toString(), name: 'LoadingActivity');
-    /*await _audioInApp.createNewAudioCache(playerId: 'intro', route: 'audio/intro_2.wav', audioInAppType: AudioInAppType.background);
-    await _audioInApp.createNewAudioCache(playerId: 'button', route: 'audio/button.wav', audioInAppType: AudioInAppType.determined);*/
-    reproducir();
+  Future<void> stop_background() async {
+    await _audioInApp.stopBackgroun();
   }
 
-  Future<void> reproducir2() async {
+
+  Future<void> play_button() async {
     await _audioInApp.play(playerId: 'button');
   }
 
@@ -45,7 +36,39 @@ class _MainActivityState extends State<MainActivity> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
-        child: Text('Main Activity'),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: EdgeInsets.only(bottom: 30),
+                child: Text('Main Activity')
+            ),
+            OutlinedButton(
+              onPressed: () {
+                play_intro_1();
+              },
+              child: Text("Play background intro 1"),
+            ),
+            OutlinedButton(
+              onPressed: () {
+                play_intro_2();
+              },
+              child: Text("Play background intro 2"),
+            ),
+            OutlinedButton(
+              onPressed: () {
+                play_button();
+              },
+              child: Text("Play Button Sound"),
+            ),
+            OutlinedButton(
+              onPressed: () {
+                stop_background();
+              },
+              child: Text("Stop background sound"),
+            )
+          ],
+        ),
       ),
     );
   }
