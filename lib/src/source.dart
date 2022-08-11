@@ -12,6 +12,7 @@ class AudioInApp with WidgetsBindingObserver {
   static const _NameLog = 'AudioInApp';
   bool _isRegistered = false;
   bool _audioPermission = true;
+  bool _audioPermissionUser = true;
 
   Map<String, dynamic> _audioCacheType = new Map<String, dynamic>();
   Map<String, dynamic> _audioCacheMap = new Map<String, dynamic>();
@@ -67,7 +68,7 @@ class AudioInApp with WidgetsBindingObserver {
       log('Entra en play', name: _NameLog);
       // came back to Foreground
       _audioPermission = true;
-      if(_audioBackgroundPlaying['playerID'] != null){
+      if(_audioBackgroundPlaying['playerID'] != null && _audioPermissionUser){
         await _audioBackgroundCacheMap[_audioBackgroundPlaying['playerID']].resume();
         _audioBackgroundPlaying = {};
       }
@@ -120,6 +121,7 @@ class AudioInApp with WidgetsBindingObserver {
     required String playerId,
   }) async{
     if(!_audioPermission) return false;
+    if(!_audioPermissionUser) return false;
     if(! await _checkExistCache(playerId)) return false;
     if(_audioCacheType[playerId] == AudioInAppType.background){
       await _playBackground(playerId);
@@ -184,6 +186,13 @@ class AudioInApp with WidgetsBindingObserver {
   }
 
   Map<String, dynamic> get audioCacheMap => _audioCacheMap;
+
+
+  bool get audioPermissionUser => _audioPermissionUser;
+
+  set audioPermissionUser(bool value) {
+    _audioPermissionUser = value;
+  }
 
   Future<void> setVol(String playerId, double vol) async{
     if(! await _checkExistCache(playerId)) return;
