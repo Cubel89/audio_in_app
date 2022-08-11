@@ -4,30 +4,59 @@ A Flutter plugin for playing audio files. Ideal for games or applications with s
 
 
 
-## Getting started
+## Getting started and Usage
 
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
 
-## Usage
-
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder. 
+1 - We import the Audio_in_app package.
 
 ```dart
-const like = 'sample';
+import 'package:audio_in_app/audio_in_app.dart';
+```
+
+2 - We create a variable of the AudioInApp class.
+```dart
+AudioInApp _audioInApp = AudioInApp();
+```
+
+3 - We load the audios that we are going to use later with the `createNewAudioCache()` method. Here we will have to insert an id to call it later of type String, the path of the audio being inside the `"assets"` folder (also of type String) and the type of audio, punctual or background. (See following examples).
+
+3.1 - If it is a punctual audio (used in button presses, character jumps or shots).
+```dart
+await _audioInApp.createNewAudioCache(playerId: 'button', route: 'audio/button.wav', audioInAppType: AudioInAppType.determined);
+```
+
+3.2 - If it is background audio (used during gameplay). Background audio has several differences from spot audio. The differences are as follows.
+<br>
+- Only one background audio can be played at the same time. If you start other background audio, the current one will stop and the new one will start.
+- The background audio plays infinitely in a loop until you decide to stop it or change it to another audio.
+
+```dart
+await _audioInApp.createNewAudioCache(playerId: 'intro1', route: 'audio/intro_1.wav', audioInAppType: AudioInAppType.background);
+```
+4 - Play audio.
+
+```dart
+await _audioInApp.play(playerId: 'button');
+```
+
+o 
+
+```dart
+await _audioInApp.play(playerId: 'intro1');
 ```
 
 
-### Generating boilerplate for Value Types
-
-Value types require a bit of boilerplate in order to connect it to generated
-code. Luckily, even this bit of boilerplate can be automated using code
-snippets support in your favourite text editor. For example, in IntelliJ you
-can use the following live template:
 
 
-Pagina de carga, se espera un segundo y medio y acto seguido carga en caché los audios que vamos a necesitar en la siguiente pagina.
+### Example
+
+There is a basic example in the [example](https://github.com/Cubel89/audio_in_app/tree/1.0.0/example) folder of the project.
+<br>
+But here we add a quick example based on the example that is in the project.
+
+<br>
+
+1 - In this case we have a loading page, where we wait 1.5 seconds and then proceed to load all the audios that are going to be used on the next page.
 
 ```dart
 import 'package:audio_in_app/audio_in_app.dart';
@@ -66,7 +95,8 @@ class _LoadingActivityState extends State<LoadingActivity> {
 }
 ```
 
-Pagina home de la aplicación. Lugar donde vamos a reproducir los audios.
+2 - This would be the next page where these sounds will be used depending on the buttons pressed.
+
 
 ```dart
 import 'package:audio_in_app/audio_in_app.dart';
@@ -145,6 +175,4 @@ class _MainActivityState extends State<MainActivity> {
 
 ## Additional information
 
-TODO: Tell users more about the package: where to find more information, how to 
-contribute to the package, how to file issues, what response they can expect 
-from the package authors, and more.
+This package uses the audioplayers package and tries to make things easier for new users. I am also not an expert in creating packages and this is the first package that I create. Therefore, feel free to collaborate to add new features or improve part of the code currently created. Any help will be welcome.
