@@ -88,6 +88,7 @@ class AudioInApp with WidgetsBindingObserver {
     required AudioInAppType audioInAppType
   }) async{
     _initialize();
+    log('createNewAudioCache ${playerId}', name: _NameLog);
     try{
       final AudioPlayer _audio = AudioPlayer(playerId: playerId);
       await _audio.setVolume(0.0);
