@@ -122,6 +122,7 @@ class AudioInApp with WidgetsBindingObserver {
   }) async{
     if(!_audioPermission) return false;
     if(!_audioPermissionUser) return false;
+    log('play ${playerId}', name: _NameLog);
     if(! await _checkExistCache(playerId)) return false;
     if(_audioCacheType[playerId] == AudioInAppType.background){
       await _playBackground(playerId);
@@ -135,6 +136,7 @@ class AudioInApp with WidgetsBindingObserver {
   Future<bool> stop({
     required String playerId,
   }) async{
+    log('stop ${playerId}', name: _NameLog);
     if(! await _checkExistCache(playerId)) return false;
     if(_audioCacheType[playerId] == AudioInAppType.background){
       await _audioBackgroundCacheMap[playerId].stop();
@@ -195,8 +197,8 @@ class AudioInApp with WidgetsBindingObserver {
   }
 
   Future<void> setVol(String playerId, double vol) async{
+    log('setVol ${playerId}', name: _NameLog);
     if(! await _checkExistCache(playerId)) return;
-
     if(_audioCacheType[playerId] == AudioInAppType.background){
       _audioBackgroundCacheList.forEach((String itemPlayerId) async {
         if(itemPlayerId == playerId){
@@ -222,6 +224,7 @@ class AudioInApp with WidgetsBindingObserver {
   }
 
   Future<bool> removeAudio(String playerId) async{
+    log('removeAudio ${playerId}', name: _NameLog);
     if(!await _checkExistCache(playerId)) return false;
     if(_audioCacheType[playerId] == AudioInAppType.background){
       await _audioBackgroundCacheMap[playerId].dispose();
