@@ -1,3 +1,7 @@
 ## 1.0.0
 
-* TODO: Describe initial release.
+* Load the audio to be able to use it later
+* Play background audio
+* Play punctual audio
+* Delete cached loaded audio
+* Change sound volume

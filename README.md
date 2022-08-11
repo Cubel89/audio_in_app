@@ -18,7 +18,7 @@ import 'package:audio_in_app/audio_in_app.dart';
 AudioInApp _audioInApp = AudioInApp();
 ```
 
-3 - We load the audios that we are going to use later with the `createNewAudioCache()` method. Here we will have to insert an id to call it later of type String, the path is of type String where the audio being inside the `"assets"` folder (also of type String) and the type of audio, punctual or background. (See following examples).
+3 - We load the audios that we are going to use later with the `createNewAudioCache()` method. Here we will have to insert an id to call it later of type String, the path is of type String where the audio being inside the `"assets"` folder and the type of audio, punctual or background. (See following examples).
 
 3.1 - If it is a punctual audio (used in button presses, character jumps or shots).
 ```dart
