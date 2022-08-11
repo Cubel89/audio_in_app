@@ -1,3 +1,8 @@
+## 1.0.1
+
+* Errors corrections
+
+
 ## 1.0.0
 
 * Load the audio to be able to use it later

@@ -122,7 +122,7 @@ class _MainActivityState extends State<MainActivity> {
     await _audioInApp.play(playerId: 'intro2');
   }
   Future<void> stop_background() async {
-    await _audioInApp.stopBackgroun();
+    await _audioInApp.stopBackground();
   }
 
 
