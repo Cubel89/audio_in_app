@@ -39,7 +39,7 @@ await _audioInApp.createNewAudioCache(playerId: 'intro1', route: 'audio/intro_1.
 await _audioInApp.play(playerId: 'button');
 ```
 
-o 
+or
 
 ```dart
 await _audioInApp.play(playerId: 'intro1');
@@ -50,7 +50,7 @@ await _audioInApp.play(playerId: 'intro1');
 
 ### Example
 
-There is a basic example in the [example](https://github.com/Cubel89/audio_in_app/tree/1.0.0/example) folder of the project.
+There is a basic example in the [example](https://github.com/Cubel89/audio_in_app/tree/1.0.1/example) folder of the project.
 <br>
 But here we add a quick example based on the example that is in the project.
 
@@ -172,6 +172,49 @@ class _MainActivityState extends State<MainActivity> {
   }
 }
 ```
+
+<br>
+<br>
+<br>
+
+### Other examples
+<br>
+Change volume to an audio at 70%.
+<br>
+
+```dart
+await _audioInApp.setVol('button', 0.7);
+```
+
+<br>
+Stop background sound no matter what audio is playing.
+<br>
+
+```dart
+await _audioInApp.stopBackground();
+```
+
+<br>
+Block all sounds. Example, the user presses the sound to mute the entire application.
+<br>
+
+```dart
+await _audioInApp.audioPermissionUser = false;
+```
+
+<br>
+Delete the audio from the cache. It will no longer play again until it is re-cached using the "createNewAudioCache" method
+<br>
+
+```dart
+await _audioInApp.removeAudio('button');
+```
+
+
+
+<br>
+<br>
+<br>
 
 ## Additional information
 

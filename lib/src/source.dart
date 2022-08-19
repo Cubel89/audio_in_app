@@ -79,9 +79,9 @@ class AudioInApp with WidgetsBindingObserver {
 
 
 
-  /**
-   * Functions Users
-   * */
+  /// Methods Users
+  ///
+  /// Method to add the audio in cache. (Required before you can play).
   Future<bool> createNewAudioCache({
     required String playerId,
     required String route,
@@ -118,6 +118,7 @@ class AudioInApp with WidgetsBindingObserver {
     return true;
   }
 
+  /// Method to start playing the audio
   Future<bool> play({
     required String playerId,
   }) async{
@@ -134,6 +135,7 @@ class AudioInApp with WidgetsBindingObserver {
     return true;
   }
 
+  /// Method to stop the audio
   Future<bool> stop({
     required String playerId,
   }) async{
@@ -148,6 +150,8 @@ class AudioInApp with WidgetsBindingObserver {
     return true;
   }
 
+
+  /// Method to stop background audio no matter what audio is playing
   Future<bool> stopBackground() async{
     _audioBackgroundCacheList.forEach((String itemPlayerId) async {
       await _audioBackgroundCacheMap[itemPlayerId].stop();
@@ -158,7 +162,7 @@ class AudioInApp with WidgetsBindingObserver {
   Future<bool> _checkExistCache(String playerId) async{
     if(_audioCacheType[playerId] == null){
       log('ERROR', name: _NameLog);
-      log('PlayerID ${playerId} not is cached', name: _NameLog);
+      log('PlayerID $playerId not is cached', name: _NameLog);
       log('Call the function "createNewAudioCache"', name: _NameLog);
       return false;
     }
@@ -193,10 +197,12 @@ class AudioInApp with WidgetsBindingObserver {
 
   bool get audioPermissionUser => _audioPermissionUser;
 
+  /// By default it will be set to "true", but if set to "false" no cached sound will play.
   set audioPermissionUser(bool value) {
     _audioPermissionUser = value;
   }
 
+  /// Change the audio volume. Value between 0.0 and 1.0
   Future<void> setVol(String playerId, double vol) async{
     log('setVol ${playerId}', name: _NameLog);
     if(! await _checkExistCache(playerId)) return;
@@ -224,6 +230,7 @@ class AudioInApp with WidgetsBindingObserver {
 
   }
 
+  /// Delete the audio from the cache. It will no longer play again until it is re-cached using the "createNewAudioCache" method
   Future<bool> removeAudio(String playerId) async{
     log('removeAudio ${playerId}', name: _NameLog);
     if(!await _checkExistCache(playerId)) return false;
