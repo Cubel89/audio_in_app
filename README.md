@@ -203,7 +203,7 @@ await _audioInApp.audioPermissionUser = false;
 ```
 
 <br>
-Delete the audio from the cache. It will no longer play again until it is re-cached using the "createNewAudioCache" method
+Delete the audio from the cache. It will no longer play again until it is re-cached using the "createNewAudioCache" method.
 <br>
 
 ```dart
