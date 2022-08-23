@@ -11,6 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
   audioplayers: ^1.0.1
+  universal_io: ^2.0.4
 
 dev_dependencies:
   flutter_test:

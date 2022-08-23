@@ -5,6 +5,7 @@ import 'package:audio_in_app/audio_in_app.dart';
 import 'package:audio_in_app/src/audio_in_app_type.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
+import 'package:universal_io/prefer_universal/io.dart';
 
 
 
@@ -93,8 +94,11 @@ class AudioInApp with WidgetsBindingObserver {
       final AudioPlayer _audio = AudioPlayer(playerId: playerId);
       await _audio.setVolume(0.0);
       await _audio.setSource(AssetSource(route));
-      await _audio.resume();
-      await _audio.stop();
+      if(Platform.isIOS){
+        await _audio.resume();
+        await _audio.stop();
+      }
+
       await _audio.setVolume(1.0);
       if(audioInAppType == AudioInAppType.determined){
         await _audio.setReleaseMode(ReleaseMode.release);
