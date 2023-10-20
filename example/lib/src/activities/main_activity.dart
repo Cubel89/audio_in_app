@@ -1,6 +1,7 @@
 import 'dart:developer';
 
 import 'package:audio_in_app/audio_in_app.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 
 class MainActivity extends StatefulWidget {
@@ -18,7 +19,10 @@ class _MainActivityState extends State<MainActivity> {
   }
 
   Future<void> play_intro_1() async {
-    await _audioInApp.play(playerId: 'intro1');
+    //await _audioInApp.play(playerId: 'intro1');
+    final player = AudioPlayer();
+    Source _ruta = AssetSource('audio/intro_1.wav');
+    await player.play(_ruta);
   }
   Future<void> play_intro_2() async {
     await _audioInApp.play(playerId: 'intro2');
