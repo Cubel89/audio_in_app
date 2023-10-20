@@ -25,6 +25,10 @@ class _MainActivityState extends State<MainActivity> {
     await player.play(_ruta);
   }
   Future<void> play_intro_2() async {
+    final player = AudioPlayer();
+    Source _ruta = AssetSource('audio/button.wav');
+    await player.play(_ruta, mode: PlayerMode.lowLatency);
+    return;
     await _audioInApp.play(playerId: 'intro2');
   }
   Future<void> stop_background() async {

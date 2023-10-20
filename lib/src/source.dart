@@ -95,6 +95,7 @@ class AudioInApp with WidgetsBindingObserver {
     _initialize();
     try{
       AudioCache _audioCache = AudioCache();
+      //AudioPlayer _audioPlayer = AudioPlayer(playerId: playerId);
       AudioPlayer _audioPlayer = AudioPlayer();
       await _audioCache.load(route);
       Map<String, dynamic> _info = {
@@ -151,7 +152,7 @@ class AudioInApp with WidgetsBindingObserver {
   }
 
   Future<bool> _checkExistCache(String playerId) async{
-    log('_audioCacheMap ${_audioCacheMap.toString()}', name: _NameLog);
+    //log('_audioPlayerMap ${_audioPlayerMap[playerId].toString()}', name: _NameLog);
     if(_audioCacheMap[playerId] == null){
       log('ERROR', name: _NameLog);
       log('PlayerID ${playerId} not is cached', name: _NameLog);
@@ -164,6 +165,11 @@ class AudioInApp with WidgetsBindingObserver {
 
   Future<void> _playDetermined(String playerId) async {
 
+    final player = AudioPlayer();
+    Source _ruta = AssetSource('audio/button.wav');
+    await player.play(_ruta, mode: PlayerMode.lowLatency);
+    return;
+
     // Reemplaza 'mi_cancion.mp3' con el nombre de tu archivo de audio.
     //String rutaCancion = 'mi_cancion.mp3';
     print(_audioPlayerMap[playerId].state);
@@ -174,11 +180,15 @@ class AudioInApp with WidgetsBindingObserver {
       await _audioPlayerMap[playerId].stop();
       await _audioPlayerMap[playerId].seek(Duration.zero);
       print('Sale en pause');
+      _audioPlayerMap[playerId].state = PlayerState.completed;
     }
     print(_audioPlayerMap[playerId].state);
     await _audioPlayerMap[playerId].resume();
-    print(_audioPlayerMap[playerId].state);
 
+
+    print(_audioPlayerMap[playerId].state);
+    //await _audioPlayerMap[playerId].seek(Duration.zero);
+    await _audioPlayerMap[playerId].setVolume(1.0);
 
     return;
     log('_playDetermined ${playerId}', name: _NameLog);
