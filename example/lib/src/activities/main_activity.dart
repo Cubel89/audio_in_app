@@ -2,7 +2,10 @@ import 'dart:developer';
 
 import 'package:audio_in_app/audio_in_app.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:soundpool/soundpool.dart';
 
 class MainActivity extends StatefulWidget {
   @override
@@ -16,16 +19,48 @@ class _MainActivityState extends State<MainActivity> {
   // Define the Map of the AudioPlayers
   final _audioPlayers = <int, AudioPlayer>{};
 
+  Soundpool? _pool;
+  SoundpoolOptions _soundpoolOptions = SoundpoolOptions();
+  int? _soundId1;
+  int? _soundId2;
+
+
   @override
   void initState() {
     super.initState();
-    //player.setSourceAsset('audio/button.wav');
-    // Define a Pool of AudioPlayers
-    const pool = 4;
-    for (int i = 0; i < pool; i++) {
-      // Create an AudioPlayer
-      _audioPlayers[i] = AudioPlayer();
+
+    /*if (!kIsWeb) {
+      _initPool(_soundpoolOptions);
+    }*/
+
+    _initPool(_soundpoolOptions);
+  }
+
+  void _initPool(SoundpoolOptions soundpoolOptions) {
+    _pool?.dispose();
+    _soundpoolOptions = soundpoolOptions;
+    _pool = Soundpool.fromOptions(options: _soundpoolOptions);
+    print('pool updated: $_pool');
+    _loadSounds();
+  }
+
+  void _loadSounds() async {
+    var sound1Asset = await rootBundle.load("assets/audio/button.wav");
+    var sound2Asset = await rootBundle.load("assets/audio/intro_1.wav");
+    _soundId1 = await _pool!.load(sound1Asset);
+    _soundId2 = await _pool!.load(sound2Asset);
+  }
+
+  Future<void> _playSound(int soundId) async {
+    await _pool!.play(soundId);
+  }
+  // Para comprobar si el sonido se está reproduciendo
+  bool isSoundPlaying(int soundId) {
+    if (soundId != null) {
+      final playbackState = _pool.getPlaybackState(streamId: soundId!);
+      return playbackState == SoundpoolStreamType.Playing;
     }
+    return false;
   }
 
   void playSound() {
@@ -48,9 +83,12 @@ class _MainActivityState extends State<MainActivity> {
     /*final player = AudioPlayer();
     Source _ruta = AssetSource('audio/intro_1.wav');
     await player.play(_ruta);*/
-    playSound();
+    //playSound();
+    _playSound(_soundId1!);
   }
   Future<void> play_intro_2() async {
+    _playSound(_soundId2!);
+    return;
     //player.stop();
     //Source _ruta = AssetSource('audio/button.wav');
     //await player.stop();
