@@ -11,23 +11,54 @@ class MainActivity extends StatefulWidget {
 
 class _MainActivityState extends State<MainActivity> {
   AudioInApp _audioInApp = AudioInApp();
+  final player = AudioPlayer();
 
+  // Define the Map of the AudioPlayers
+  final _audioPlayers = <int, AudioPlayer>{};
 
   @override
   void initState() {
     super.initState();
+    //player.setSourceAsset('audio/button.wav');
+    // Define a Pool of AudioPlayers
+    const pool = 4;
+    for (int i = 0; i < pool; i++) {
+      // Create an AudioPlayer
+      _audioPlayers[i] = AudioPlayer();
+    }
   }
+
+  void playSound() {
+    for (int i = 0; i < _audioPlayers.length; i++) {
+      final currentAudioPlayer = _audioPlayers[i]!;
+      // Find the AudioPlayer from the Pool which is not playing at this moment
+      if (currentAudioPlayer.state != PlayerState.playing) {
+        currentAudioPlayer.play(
+          AssetSource('audio/button.wav'),
+          mode: PlayerMode.lowLatency,
+        );
+        break;
+      }
+    }
+  }
+
 
   Future<void> play_intro_1() async {
     //await _audioInApp.play(playerId: 'intro1');
-    final player = AudioPlayer();
+    /*final player = AudioPlayer();
     Source _ruta = AssetSource('audio/intro_1.wav');
-    await player.play(_ruta);
+    await player.play(_ruta);*/
+    playSound();
   }
   Future<void> play_intro_2() async {
-    final player = AudioPlayer();
-    Source _ruta = AssetSource('audio/button.wav');
-    await player.play(_ruta, mode: PlayerMode.lowLatency);
+    //player.stop();
+    //Source _ruta = AssetSource('audio/button.wav');
+    //await player.stop();
+    await player.seek(Duration(microseconds: 0));
+    await player.stop();
+    //await player.resume();
+    //await player.play(_ruta, mode: PlayerMode.lowLatency);
+    await player.resume();
     return;
     await _audioInApp.play(playerId: 'intro2');
   }
