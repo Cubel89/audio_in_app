@@ -1,4 +1,9 @@
-## 2.0.0
+## 2.1.0
+
+* Updated the "audioplayers" version to 5.2.0
+* Error correction
+
+## 2.0.0 (Do not use this version because it gives an error.)
 
 * Updated the "audioplayers" version to 5.2.0
 * Error correction

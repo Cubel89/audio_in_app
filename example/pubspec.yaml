@@ -36,8 +36,6 @@ dependencies:
   cupertino_icons: ^1.0.2
   audio_in_app:
     path: ../
-  #audioplayers: ^5.2.0
-  #soundpool: ^2.4.1
 
 dev_dependencies:
   flutter_test:

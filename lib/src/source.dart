@@ -5,8 +5,7 @@ import 'package:audio_in_app/audio_in_app.dart';
 import 'package:audio_in_app/src/audio_in_app_type.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:soundpool/soundpool.dart';
+import 'package:universal_io/io.dart';
 
 
 
@@ -14,20 +13,10 @@ class AudioInApp with WidgetsBindingObserver {
   static const _NameLog = 'AudioInApp';
   bool _isRegistered = false;
   bool _audioPermission = true;
-
-  Soundpool? _pool;
-  SoundpoolOptions _soundpoolOptions = SoundpoolOptions();
-  Map<String, dynamic> _soundsCache = {};
-
-
-
-
-  Map<String, dynamic> _audioPlayerMap = {};
-
-
+  bool _audioPermissionUser = true;
 
   Map<String, dynamic> _audioCacheType = new Map<String, dynamic>();
-  //Map<String, dynamic> _audioCacheMap = new Map<String, dynamic>();
+  Map<String, dynamic> _audioCacheMap = new Map<String, dynamic>();
   List<String> _audioBackgroundCacheList = <String>[];
   Map<String, dynamic> _audioBackgroundCacheMap = new Map<String, dynamic>();
   Map<String, dynamic> _audioBackgroundPlaying = {};
@@ -42,7 +31,6 @@ class AudioInApp with WidgetsBindingObserver {
       return;
     }
     _isRegistered = true;
-    _pool = Soundpool.fromOptions(options: _soundpoolOptions);
     _ambiguate(WidgetsBinding.instance)?.addObserver(this);
   }
 
@@ -71,9 +59,11 @@ class AudioInApp with WidgetsBindingObserver {
       // went to Background
       _audioPermission = false;
       _audioBackgroundCacheList.forEach((String itemPlayerId) async {
-        if(_audioBackgroundCacheMap[itemPlayerId].state == PlayerState.playing){
-          await _audioBackgroundCacheMap[itemPlayerId].pause();
-          _audioBackgroundPlaying['playerID'] = itemPlayerId;
+        if(_audioBackgroundCacheMap[itemPlayerId] != null){
+          if(_audioBackgroundCacheMap[itemPlayerId].state == PlayerState.playing){
+            await _audioBackgroundCacheMap[itemPlayerId].pause();
+            _audioBackgroundPlaying['playerID'] = itemPlayerId;
+          }
         }
       });
     }
@@ -81,7 +71,7 @@ class AudioInApp with WidgetsBindingObserver {
       log('Entra en play', name: _NameLog);
       // came back to Foreground
       _audioPermission = true;
-      if(_audioBackgroundPlaying['playerID'] != null){
+      if(_audioBackgroundPlaying['playerID'] != null && _audioPermissionUser){
         await _audioBackgroundCacheMap[_audioBackgroundPlaying['playerID']].resume();
         _audioBackgroundPlaying = {};
       }
@@ -92,69 +82,66 @@ class AudioInApp with WidgetsBindingObserver {
 
 
 
-  /**
-   * Functions Users
-   * */
+  /// Methods Users
+  ///
+  /// Method to add the audio in cache. (Required before you can play).
   Future<bool> createNewAudioCache({
     required String playerId,
     required String route,
     required AudioInAppType audioInAppType
   }) async{
     _initialize();
+    log('createNewAudioCache $playerId', name: _NameLog);
     try{
-
-
       if(audioInAppType == AudioInAppType.determined){
-        ByteData _sound = await rootBundle.load(route);
-        Map<String, dynamic> _info = {
-          'library': 'soundpool',
-          'id_sound': await _pool!.load(_sound),
-          'route': route,
-          'audioInAppType': audioInAppType,
-          'volume': 1.0,
-        };
-        _soundsCache[playerId] = _info;
+        final AudioPlayer _audio = AudioPlayer(playerId: playerId,);
+        await _audio.setVolume(0.0);
+        await _audio.setSource(AssetSource(route));
+        await _audio.setReleaseMode(ReleaseMode.stop);
+        if(Platform.isIOS){
+          await _audio.resume();
+          await _audio.stop();
+        }
+
+        await _audio.setVolume(1.0);
+
+        await _audio.setPlayerMode(PlayerMode.lowLatency);
+        _audioCacheMap[playerId] = _audio;
+
+        if(!_audioBackgroundCacheList.contains(playerId)){
+          _audioBackgroundCacheList.add(playerId);
+        }
       }
 
       if(audioInAppType == AudioInAppType.background){
-        ByteData _sound = await rootBundle.load(route);
-        Map<String, dynamic> _info = {
-          'library': 'soundpool',
-          'id_sound': await _pool!.load(_sound),
-          'route': route,
-          'audioInAppType': audioInAppType,
-          'volume': 1.0,
-        };
-        _soundsCache[playerId] = _info;
+        final AudioPlayer _audio = AudioPlayer(playerId: playerId,);
+        await _audio.setVolume(0.0);
+        await _audio.setSource(AssetSource(route));
+        if(Platform.isIOS){
+          await _audio.resume();
+          await _audio.stop();
+        }
+
+        await _audio.setVolume(1.0);
+
+        await _audio.setReleaseMode(ReleaseMode.loop);
+        _audioBackgroundCacheMap[playerId] = _audio;
+        if(!_audioBackgroundCacheList.contains(playerId)){
+          _audioBackgroundCacheList.add(playerId);
+        }
       }
 
-      return true;
 
 
-      AudioPlayer _audioPlayer = AudioPlayer(playerId: playerId);
-      if(audioInAppType == AudioInAppType.determined){
-        await _audioPlayer.setPlayerMode(PlayerMode.lowLatency);
-      } else if (audioInAppType == AudioInAppType.background){
-        await _audioPlayer.setPlayerMode(PlayerMode.mediaPlayer);
+
+      /*if(audioInAppType == AudioInAppType.determined){
+        await _audio.setPlayerMode(PlayerMode.lowLatency);
+        _audioCacheMap[playerId] = _audio;
       }
-      await _audioPlayer.setSourceAsset(route);
+      if(audioInAppType == AudioInAppType.background){
 
-      Source _source = AssetSource(route);
-      //await _audioPlayer.play(_source,volume: 1.0);
-      //await _audioPlayer.stop();
-      await _audioPlayer.setSource(_source);
-      await _audioPlayer.setVolume(1.0);
-
-      log('Ruta ${route}', name: _NameLog);
-      log('Duracion ${await _audioPlayer.getDuration()}', name: _NameLog);
-
-      Map<String, dynamic> _info = {
-        'audioPlayer': _audioPlayer,
-        'route': route,
-        'source': _source,
-        'audioInAppType': audioInAppType
-      };
-      _audioPlayerMap[playerId] = _info;
+      }*/
+      _audioCacheType[playerId] = audioInAppType;
     } catch(e){
       log('ERROR', name: _NameLog);
       log(e.toString(), name: _NameLog);
@@ -163,45 +150,55 @@ class AudioInApp with WidgetsBindingObserver {
     return true;
   }
 
+  /// Method to start playing the audio
   Future<bool> play({
     required String playerId,
   }) async{
     if(!_audioPermission) return false;
+    if(!_audioPermissionUser) return false;
+    log('play $playerId', name: _NameLog);
     if(! await _checkExistCache(playerId)) return false;
-    if(_soundsCache[playerId]['audioInAppType'] == AudioInAppType.background){
+    if(_audioCacheType[playerId] == AudioInAppType.background){
       await _playBackground(playerId);
     }
-    if(_soundsCache[playerId]['audioInAppType'] == AudioInAppType.determined){
+    if(_audioCacheType[playerId] == AudioInAppType.determined){
       await _playDetermined(playerId);
     }
     return true;
   }
 
+  /// Method to stop the audio
   Future<bool> stop({
     required String playerId,
   }) async{
+    log('stop $playerId', name: _NameLog);
     if(! await _checkExistCache(playerId)) return false;
     if(_audioCacheType[playerId] == AudioInAppType.background){
       await _audioBackgroundCacheMap[playerId].stop();
     }
     if(_audioCacheType[playerId] == AudioInAppType.determined){
-      await _audioPlayerMap[playerId].stop();
+      await _audioCacheMap[playerId].stop();
     }
     return true;
   }
 
-  Future<bool> stopBackgroun() async{
+
+  /// Method to stop background audio no matter what audio is playing
+  Future<bool> stopBackground() async{
     _audioBackgroundCacheList.forEach((String itemPlayerId) async {
-      await _audioBackgroundCacheMap[itemPlayerId].stop();
+      if(_audioBackgroundCacheMap[itemPlayerId] != null){
+        if(_audioBackgroundCacheMap[itemPlayerId].state == PlayerState.playing){
+          await _audioBackgroundCacheMap[itemPlayerId].stop();
+        }
+      }
     });
     return true;
   }
 
   Future<bool> _checkExistCache(String playerId) async{
-    //log('_audioPlayerMap ${_audioPlayerMap[playerId].toString()}', name: _NameLog);
-    if(_soundsCache[playerId] == null){
+    if(_audioCacheType[playerId] == null){
       log('ERROR', name: _NameLog);
-      log('PlayerID ${playerId} not is cached', name: _NameLog);
+      log('PlayerID $playerId not is cached', name: _NameLog);
       log('Call the function "createNewAudioCache"', name: _NameLog);
       return false;
     }
@@ -210,46 +207,42 @@ class AudioInApp with WidgetsBindingObserver {
   }
 
   Future<void> _playDetermined(String playerId) async {
-    log('Play playerID: ${playerId}', name: _NameLog);
-    if(_soundsCache[playerId]['library'] == 'soundpool'){
-      await _pool?.play(_soundsCache[playerId]['id_sound']);
-      return;
+    log('_playDetermined $playerId', name: _NameLog);
+    log('State ${_audioCacheMap[playerId].state}', name: _NameLog);
+    if(_audioCacheMap[playerId].state == PlayerState.playing){
+      await _audioCacheMap[playerId].stop();
     }
+    log('State 2 ${_audioCacheMap[playerId].state}', name: _NameLog);
+    await _audioCacheMap[playerId].resume();
+    log('FIN _playDetermined $playerId', name: _NameLog);
   }
 
   Future<void> _playBackground(String playerId) async {
-    /*_audioBackgroundCacheList.forEach((String itemPlayerId) async {
-      await _audioBackgroundCacheMap[itemPlayerId].stop();
-    });*/
-
-
-    log('Play Background playerID: ${playerId}', name: _NameLog);
-    if(_soundsCache[playerId]['library'] == 'soundpool'){
-      await _pool?.stop(_soundsCache[playerId]['id_sound']);
-      await _pool?.play(_soundsCache[playerId]['id_sound'], repeat: 1);
-    }
-    log('FIN PAY Background playerID: ${playerId}', name: _NameLog);
-    return;
-
-
-    return;
-    log('_playBackground ${playerId}', name: _NameLog);
+    _audioBackgroundCacheList.forEach((String itemPlayerId) async {
+      if(_audioBackgroundCacheMap[itemPlayerId] != null){
+        await _audioBackgroundCacheMap[itemPlayerId].stop();
+      }
+    });
+    log('_playBackground $playerId', name: _NameLog);
     await _audioBackgroundCacheMap[playerId].resume();
-    log('FIN _playBackground ${playerId}', name: _NameLog);
+    log('FIN _playBackground $playerId', name: _NameLog);
   }
 
-  //Map<String, dynamic> get audioCacheMap => _audioCacheMap;
+  Map<String, dynamic> get audioCacheMap => _audioCacheMap;
 
+
+  bool get audioPermissionUser => _audioPermissionUser;
+
+  /// By default it will be set to "true", but if set to "false" no cached sound will play.
+  set audioPermissionUser(bool value) {
+    _audioPermissionUser = value;
+  }
+
+  /// Change the audio volume. Value between 0.0 and 1.0
   Future<void> setVol(String playerId, double vol) async{
+    log('setVol $playerId', name: _NameLog);
     if(! await _checkExistCache(playerId)) return;
-
-    log('setVol playerID: ${playerId}, Vol: ${vol}', name: _NameLog);
-    if(_soundsCache[playerId]['library'] == 'soundpool'){
-      await _pool?.setVolume(soundId: _soundsCache[playerId]['id_sound'], volume: vol);
-      return;
-    }
-
-    if(_audioPlayerMap[playerId]['audioInAppType'] == AudioInAppType.background){
+    if(_audioCacheType[playerId] == AudioInAppType.background){
       _audioBackgroundCacheList.forEach((String itemPlayerId) async {
         if(itemPlayerId == playerId){
           if(_audioBackgroundCacheMap[itemPlayerId].state == PlayerState.playing){
@@ -267,24 +260,23 @@ class AudioInApp with WidgetsBindingObserver {
         }
       });
     }
-    if(_audioCacheType[playerId]['audioInAppType'] == AudioInAppType.determined){
-      AudioPlayer _audioPlayer = _audioPlayerMap[playerId]['audioPlayer'];
-      await _audioPlayer.setVolume(vol);
-      _audioPlayerMap[playerId]['audioPlayer'] = _audioPlayer;
+    if(_audioCacheType[playerId] == AudioInAppType.determined){
+      await _audioCacheMap[playerId].setVolume(vol);
     }
 
   }
 
+  /// Delete the audio from the cache. It will no longer play again until it is re-cached using the "createNewAudioCache" method
   Future<bool> removeAudio(String playerId) async{
+    log('removeAudio $playerId', name: _NameLog);
     if(!await _checkExistCache(playerId)) return false;
     if(_audioCacheType[playerId] == AudioInAppType.background){
       await _audioBackgroundCacheMap[playerId].dispose();
       _audioBackgroundCacheMap.removeWhere((key, value) => key == playerId);
     }
-    if(_audioPlayerMap[playerId]['audioInAppType'] == AudioInAppType.determined){
-      AudioPlayer _audioPlayer = _audioPlayerMap[playerId]['audioPlayer'];
-      await _audioPlayer.dispose();
-      _audioPlayerMap.removeWhere((key, value) => key == playerId);
+    if(_audioCacheType[playerId] == AudioInAppType.determined){
+      await _audioCacheMap[playerId].dispose();
+      _audioCacheMap.removeWhere((key, value) => key == playerId);
     }
     _audioCacheType.removeWhere((key, value) => key == playerId);
     _audioBackgroundCacheList.remove(playerId);
