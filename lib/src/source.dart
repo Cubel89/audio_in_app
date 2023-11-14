@@ -187,9 +187,7 @@ class AudioInApp with WidgetsBindingObserver {
   Future<bool> stopBackground() async{
     _audioBackgroundCacheList.forEach((String itemPlayerId) async {
       if(_audioBackgroundCacheMap[itemPlayerId] != null){
-        if(_audioBackgroundCacheMap[itemPlayerId].state == PlayerState.playing){
-          await _audioBackgroundCacheMap[itemPlayerId].stop();
-        }
+        await _audioBackgroundCacheMap[itemPlayerId].stop();
       }
     });
     return true;

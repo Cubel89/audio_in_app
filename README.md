@@ -50,7 +50,7 @@ await _audioInApp.play(playerId: 'intro1');
 
 ### Example
 
-There is a basic example in the [example](https://github.com/Cubel89/audio_in_app/tree/1.0.0/example) folder of the project.
+There is a basic example in the [example](https://github.com/Cubel89/audio_in_app/tree/2.1.1/example) folder of the project.
 <br>
 But here we add a quick example based on the example that is in the project.
 
