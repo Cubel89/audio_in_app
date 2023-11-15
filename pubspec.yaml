@@ -1,5 +1,5 @@
 name: audio_in_app
-description: A Flutter plugin for playing audio files. Ideal for games or applications with sound.
+description: A Flutter package for playing audio files. Ideal for games or applications with sound.
 version: 2.1.1
 homepage: https://github.com/Cubel89/audio_in_app/tree//2.1.0
 

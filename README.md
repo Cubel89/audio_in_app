@@ -1,6 +1,6 @@
 # audio_in_app
 
-A Flutter plugin for playing audio files. Ideal for games or applications with sound.
+A Flutter package for playing audio files. Ideal for games or applications with sound.
 
 
 
