@@ -15,10 +15,10 @@ class AudioInApp with WidgetsBindingObserver {
   bool _audioPermission = true;
   bool _audioPermissionUser = true;
 
-  Map<String, dynamic> _audioCacheType = new Map<String, dynamic>();
-  Map<String, dynamic> _audioCacheMap = new Map<String, dynamic>();
-  List<String> _audioBackgroundCacheList = <String>[];
-  Map<String, dynamic> _audioBackgroundCacheMap = new Map<String, dynamic>();
+  Map<String, dynamic> _audioCacheType = {};
+  Map<String, dynamic> _audioCacheMap = {};
+  List<String> _audioBackgroundCacheList = [];
+  Map<String, dynamic> _audioBackgroundCacheMap = {};
   Map<String, dynamic> _audioBackgroundPlaying = {};
 
 
@@ -36,7 +36,6 @@ class AudioInApp with WidgetsBindingObserver {
 
   /// Dispose the [WidgetsBinding] observer.
   void dispose() {
-    //audioPlayer.dispose();
     if (!_isRegistered) {
       return;
     }
@@ -55,7 +54,7 @@ class AudioInApp with WidgetsBindingObserver {
   Future<void> didChangeAppLifecycleState(AppLifecycleState state) async {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.paused) {
-      log('Entra en pausa', name: _NameLog);
+      log('Paused', name: _NameLog);
       // went to Background
       _audioPermission = false;
       _audioBackgroundCacheList.forEach((String itemPlayerId) async {
@@ -68,7 +67,7 @@ class AudioInApp with WidgetsBindingObserver {
       });
     }
     if (state == AppLifecycleState.resumed) {
-      log('Entra en play', name: _NameLog);
+      log('Resumed', name: _NameLog);
       // came back to Foreground
       _audioPermission = true;
       if(_audioBackgroundPlaying['playerID'] != null && _audioPermissionUser){
@@ -130,17 +129,6 @@ class AudioInApp with WidgetsBindingObserver {
           _audioBackgroundCacheList.add(playerId);
         }
       }
-
-
-
-
-      /*if(audioInAppType == AudioInAppType.determined){
-        await _audio.setPlayerMode(PlayerMode.lowLatency);
-        _audioCacheMap[playerId] = _audio;
-      }
-      if(audioInAppType == AudioInAppType.background){
-
-      }*/
       _audioCacheType[playerId] = audioInAppType;
     } catch(e){
       log('ERROR', name: _NameLog);
@@ -206,13 +194,10 @@ class AudioInApp with WidgetsBindingObserver {
 
   Future<void> _playDetermined(String playerId) async {
     log('_playDetermined $playerId', name: _NameLog);
-    log('State ${_audioCacheMap[playerId].state}', name: _NameLog);
     if(_audioCacheMap[playerId].state == PlayerState.playing){
       await _audioCacheMap[playerId].stop();
     }
-    log('State 2 ${_audioCacheMap[playerId].state}', name: _NameLog);
     await _audioCacheMap[playerId].resume();
-    log('FIN _playDetermined $playerId', name: _NameLog);
   }
 
   Future<void> _playBackground(String playerId) async {
@@ -223,7 +208,6 @@ class AudioInApp with WidgetsBindingObserver {
     });
     log('_playBackground $playerId', name: _NameLog);
     await _audioBackgroundCacheMap[playerId].resume();
-    log('FIN _playBackground $playerId', name: _NameLog);
   }
 
   Map<String, dynamic> get audioCacheMap => _audioCacheMap;

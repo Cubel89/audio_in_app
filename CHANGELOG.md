@@ -1,3 +1,7 @@
+## 2.1.2
+
+* Error correction
+
 ## 2.1.1
 
 * Error correction
