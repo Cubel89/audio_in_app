@@ -41,12 +41,12 @@ class _MainActivityState extends State<MainActivity> {
               ),
               const SizedBox(height: 8),
               OutlinedButton(
-                onPressed: () => _audioInApp.stop(playerId: 'intro1'),
+                onPressed: () => _audioInApp.stopBackground(playerId: 'intro1'),
                 child: const Text('Stop intro 1 only'),
               ),
               const SizedBox(height: 8),
               OutlinedButton(
-                onPressed: () => _audioInApp.stop(playerId: 'intro2'),
+                onPressed: () => _audioInApp.stopBackground(playerId: 'intro2'),
                 child: const Text('Stop intro 2 only'),
               ),
               const SizedBox(height: 8),

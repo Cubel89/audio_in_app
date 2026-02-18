@@ -187,17 +187,30 @@ class AudioInApp with WidgetsBindingObserver {
     return true;
   }
 
-  /// Stops all background audio that is currently playing.
+  /// Stops background audio.
   ///
+  /// If [playerId] is provided, stops only that specific background audio.
+  /// If [playerId] is omitted, stops all background audios currently playing.
   /// Determined (one-shot) audios are not affected.
-  Future<bool> stopBackground() async {
-    for (final itemPlayerId in _audioBackgroundCacheList) {
-      final player = _audioBackgroundCacheMap[itemPlayerId];
-      if (player != null) {
-        await player.stop();
+  ///
+  /// Returns `false` if a [playerId] is provided but is not cached.
+  Future<bool> stopBackground({String? playerId}) async {
+    if (playerId != null) {
+      log('stopBackground $playerId', name: _nameLog);
+      if (!await _checkExistCache(playerId)) return false;
+      final player = _audioBackgroundCacheMap[playerId];
+      if (player != null) await player.stop();
+      _audioBackgroundPlayingIds.remove(playerId);
+    } else {
+      log('stopBackground all', name: _nameLog);
+      for (final itemPlayerId in _audioBackgroundCacheList) {
+        final player = _audioBackgroundCacheMap[itemPlayerId];
+        if (player != null) {
+          await player.stop();
+        }
       }
+      _audioBackgroundPlayingIds.clear();
     }
-    _audioBackgroundPlayingIds.clear();
     return true;
   }
 

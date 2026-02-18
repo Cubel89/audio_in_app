@@ -46,13 +46,13 @@ or
 await _audioInApp.play(playerId: 'intro1');
 ```
 
-5 - Stop a specific audio.
+5 - Stop a specific background audio.
 
 ```dart
-await _audioInApp.stop(playerId: 'intro1');
+await _audioInApp.stopBackground(playerId: 'intro1');
 ```
 
-6 - Stop all background audios.
+6 - Stop all background audios at once.
 
 ```dart
 await _audioInApp.stopBackground();
@@ -145,7 +145,7 @@ class _MainActivityState extends State<MainActivity> {
               child: Text("Play background intro 2"),
             ),
             OutlinedButton(
-              onPressed: () => _audioInApp.stop(playerId: 'intro1'),
+              onPressed: () => _audioInApp.stopBackground(playerId: 'intro1'),
               child: Text("Stop intro 1 only"),
             ),
             OutlinedButton(
