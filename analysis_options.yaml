@@ -1,4 +1,10 @@
-include: package:flutter_lints/flutter.yaml
+analyzer:
+  errors:
+    missing_return: error
+    dead_code: warning
 
-# Additional information about this file can be found at
-# https://dart.dev/guides/language/analysis-options
+linter:
+  rules:
+    - prefer_const_constructors
+    - prefer_const_declarations
+    - avoid_print

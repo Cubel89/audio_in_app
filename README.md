@@ -2,7 +2,7 @@
 
 A Flutter package for playing audio files. Ideal for games or applications with sound.
 
-
+Supports Android, iOS, macOS, Windows, Linux, and Web.
 
 ## Getting started and Usage
 
@@ -27,8 +27,9 @@ await _audioInApp.createNewAudioCache(playerId: 'button', route: 'audio/button.w
 
 3.2 - If it is background audio (used during gameplay). Background audio has several differences from spot audio. The differences are as follows.
 <br>
-- Only one background audio can be played at the same time. If you start other background audio, the current one will stop and the new one will start.
-- The background audio plays infinitely in a loop until you decide to stop it or change it to another audio.
+- Background audio plays infinitely in a loop until you decide to stop it.
+- Multiple background audios can play simultaneously with independent volume control.
+- Use `stopBackground()` to stop all background audios at once, or `stop(playerId:)` to stop a specific one.
 
 ```dart
 await _audioInApp.createNewAudioCache(playerId: 'intro1', route: 'audio/intro_1.wav', audioInAppType: AudioInAppType.background);
@@ -39,18 +40,34 @@ await _audioInApp.createNewAudioCache(playerId: 'intro1', route: 'audio/intro_1.
 await _audioInApp.play(playerId: 'button');
 ```
 
-o 
+or
 
 ```dart
 await _audioInApp.play(playerId: 'intro1');
 ```
 
+5 - Stop a specific audio.
 
+```dart
+await _audioInApp.stop(playerId: 'intro1');
+```
+
+6 - Stop all background audios.
+
+```dart
+await _audioInApp.stopBackground();
+```
+
+7 - Change volume of a specific audio (0.0 to 1.0).
+
+```dart
+await _audioInApp.setVol('intro1', 0.5);
+```
 
 
 ### Example
 
-There is a basic example in the [example](https://github.com/Cubel89/audio_in_app/tree/2.1.1/example) folder of the project.
+There is a basic example in the [example](https://github.com/Cubel89/audio_in_app/tree/3.0.0/example) folder of the project.
 <br>
 But here we add a quick example based on the example that is in the project.
 
@@ -73,7 +90,7 @@ class _LoadingActivityState extends State<LoadingActivity> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(Duration(milliseconds: 1500)).then((value) =>   goToMain());
+    Future.delayed(Duration(milliseconds: 1500)).then((value) => goToMain());
   }
 
   @override
@@ -84,7 +101,6 @@ class _LoadingActivityState extends State<LoadingActivity> {
       ),
     );
   }
-
 
   Future<void> goToMain() async {
     await _audioInApp.createNewAudioCache(playerId: 'intro1', route: 'audio/intro_1.wav', audioInAppType: AudioInAppType.background);
@@ -111,26 +127,6 @@ class _MainActivityState extends State<MainActivity> {
   AudioInApp _audioInApp = AudioInApp();
 
   @override
-  void initState() {
-    super.initState();
-  }
-
-  Future<void> play_intro_1() async {
-    await _audioInApp.play(playerId: 'intro1');
-  }
-  Future<void> play_intro_2() async {
-    await _audioInApp.play(playerId: 'intro2');
-  }
-  Future<void> stop_background() async {
-    await _audioInApp.stopBackgroun();
-  }
-
-
-  Future<void> play_button() async {
-    await _audioInApp.play(playerId: 'button');
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
@@ -139,32 +135,31 @@ class _MainActivityState extends State<MainActivity> {
           children: [
             Container(
                 margin: EdgeInsets.only(bottom: 30),
-                child: Text('Main Activity')
-            ),
+                child: Text('Main Activity')),
             OutlinedButton(
-              onPressed: () {
-                play_intro_1();
-              },
+              onPressed: () => _audioInApp.play(playerId: 'intro1'),
               child: Text("Play background intro 1"),
             ),
             OutlinedButton(
-              onPressed: () {
-                play_intro_2();
-              },
+              onPressed: () => _audioInApp.play(playerId: 'intro2'),
               child: Text("Play background intro 2"),
             ),
             OutlinedButton(
-              onPressed: () {
-                play_button();
-              },
+              onPressed: () => _audioInApp.stop(playerId: 'intro1'),
+              child: Text("Stop intro 1 only"),
+            ),
+            OutlinedButton(
+              onPressed: () => _audioInApp.setVol('intro1', 0.3),
+              child: Text("Lower volume intro 1"),
+            ),
+            OutlinedButton(
+              onPressed: () => _audioInApp.play(playerId: 'button'),
               child: Text("Play Button Sound"),
             ),
             OutlinedButton(
-              onPressed: () {
-                stop_background();
-              },
-              child: Text("Stop background sound"),
-            )
+              onPressed: () => _audioInApp.stopBackground(),
+              child: Text("Stop all background sounds"),
+            ),
           ],
         ),
       ),
@@ -175,4 +170,4 @@ class _MainActivityState extends State<MainActivity> {
 
 ## Additional information
 
-This package uses the audioplayers package and tries to make things easier for new users. I am also not an expert in creating packages and this is the first package that I create. Therefore, feel free to collaborate to add new features or improve part of the code currently created. Any help will be welcome.
+This package uses the [audioplayers](https://pub.dev/packages/audioplayers) 6.x package and tries to make things easier for new users. Feel free to collaborate to add new features or improve part of the code currently created. Any help will be welcome.

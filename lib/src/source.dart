@@ -1,27 +1,37 @@
-library audio_in_app;
-
 import 'dart:developer';
-import 'package:audio_in_app/audio_in_app.dart';
+
 import 'package:audio_in_app/src/audio_in_app_type.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter/material.dart';
-import 'package:universal_io/io.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/widgets.dart';
 
-
-
+/// A singleton class that manages audio playback in your app.
+///
+/// Supports two types of audio:
+/// - [AudioInAppType.determined]: Short, one-shot sounds (buttons, effects).
+/// - [AudioInAppType.background]: Looping audio (music, ambient). Multiple
+///   background audios can play simultaneously with independent control.
+///
+/// Audio is automatically paused when the app goes to background and resumed
+/// when it comes back to foreground.
 class AudioInApp with WidgetsBindingObserver {
-  static const _NameLog = 'AudioInApp';
+  static const _nameLog = 'AudioInApp';
   bool _isRegistered = false;
   bool _audioPermission = true;
   bool _audioPermissionUser = true;
 
-  Map<String, dynamic> _audioCacheType = {};
-  Map<String, dynamic> _audioCacheMap = {};
-  List<String> _audioBackgroundCacheList = [];
-  Map<String, dynamic> _audioBackgroundCacheMap = {};
-  Map<String, dynamic> _audioBackgroundPlaying = {};
+  final Map<String, AudioInAppType> _audioCacheType = {};
+  final Map<String, AudioPlayer> _audioCacheMap = {};
+  final List<String> _audioBackgroundCacheList = [];
+  final Map<String, AudioPlayer> _audioBackgroundCacheMap = {};
+  final Set<String> _audioBackgroundPlayingIds = {};
 
-
+  // Singleton
+  static final AudioInApp _singletonAudioInApp = AudioInApp._internal();
+  factory AudioInApp() {
+    return _singletonAudioInApp;
+  }
+  AudioInApp._internal();
 
   /// Registers a [WidgetsBinding] observer.
   ///
@@ -31,247 +41,252 @@ class AudioInApp with WidgetsBindingObserver {
       return;
     }
     _isRegistered = true;
-    _ambiguate(WidgetsBinding.instance)?.addObserver(this);
+    WidgetsBinding.instance.addObserver(this);
   }
 
-  /// Dispose the [WidgetsBinding] observer.
+  /// Disposes the [WidgetsBinding] observer.
   void dispose() {
     if (!_isRegistered) {
       return;
     }
-    _ambiguate(WidgetsBinding.instance)?.removeObserver(this);
+    WidgetsBinding.instance.removeObserver(this);
     _isRegistered = false;
   }
-
-  //Singleton
-  static final AudioInApp _singletonAudioInApp = new AudioInApp._internal();
-  factory AudioInApp() {
-    return _singletonAudioInApp;
-  }
-  AudioInApp._internal();
 
   @override
   Future<void> didChangeAppLifecycleState(AppLifecycleState state) async {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.paused) {
-      log('Paused', name: _NameLog);
-      // went to Background
+      log('Paused', name: _nameLog);
       _audioPermission = false;
-      _audioBackgroundCacheList.forEach((String itemPlayerId) async {
-        if(_audioBackgroundCacheMap[itemPlayerId] != null){
-          if(_audioBackgroundCacheMap[itemPlayerId].state == PlayerState.playing){
-            await _audioBackgroundCacheMap[itemPlayerId].pause();
-            _audioBackgroundPlaying['playerID'] = itemPlayerId;
-          }
+      for (final playerId in _audioBackgroundPlayingIds) {
+        final player = _audioBackgroundCacheMap[playerId];
+        if (player != null && player.state == PlayerState.playing) {
+          await player.pause();
         }
-      });
+      }
     }
     if (state == AppLifecycleState.resumed) {
-      log('Resumed', name: _NameLog);
-      // came back to Foreground
+      log('Resumed', name: _nameLog);
       _audioPermission = true;
-      if(_audioBackgroundPlaying['playerID'] != null && _audioPermissionUser){
-        await _audioBackgroundCacheMap[_audioBackgroundPlaying['playerID']].resume();
-        _audioBackgroundPlaying = {};
+      if (_audioPermissionUser) {
+        for (final playerId in _audioBackgroundPlayingIds) {
+          final player = _audioBackgroundCacheMap[playerId];
+          if (player != null) {
+            await player.resume();
+          }
+        }
       }
     }
   }
 
-
-
-
-
-  /// Methods Users
+  /// Adds an audio file to the cache. This is required before playing.
   ///
-  /// Method to add the audio in cache. (Required before you can play).
+  /// [playerId] is a unique identifier to reference this audio later.
+  /// [route] is the asset path relative to the `assets` folder (e.g. `'audio/button.wav'`).
+  /// [audioInAppType] defines the playback behavior:
+  /// - [AudioInAppType.determined]: One-shot, low latency.
+  /// - [AudioInAppType.background]: Looping. Multiple backgrounds can play simultaneously.
+  ///
+  /// Returns `true` if the audio was cached successfully, `false` on error.
   Future<bool> createNewAudioCache({
     required String playerId,
     required String route,
-    required AudioInAppType audioInAppType
-  }) async{
+    required AudioInAppType audioInAppType,
+  }) async {
     _initialize();
-    log('createNewAudioCache $playerId', name: _NameLog);
-    try{
-      if(audioInAppType == AudioInAppType.determined){
-        final AudioPlayer _audio = AudioPlayer(playerId: playerId,);
-        await _audio.setVolume(0.0);
-        await _audio.setSource(AssetSource(route));
-        await _audio.setReleaseMode(ReleaseMode.stop);
-        if(Platform.isIOS){
-          await _audio.resume();
-          await _audio.stop();
+    log('createNewAudioCache $playerId', name: _nameLog);
+    try {
+      if (audioInAppType == AudioInAppType.determined) {
+        final audio = AudioPlayer(playerId: playerId);
+        await audio.setVolume(0.0);
+        await audio.setSource(AssetSource(route));
+        await audio.setReleaseMode(ReleaseMode.stop);
+        // iOS workaround: prime the audio session by briefly playing at zero volume.
+        // AVAudioPlayer on iOS requires at least one play cycle before resume()
+        // works reliably from a cached state.
+        if (defaultTargetPlatform == TargetPlatform.iOS) {
+          await audio.resume();
+          await audio.stop();
         }
-
-        await _audio.setVolume(1.0);
-
-        await _audio.setPlayerMode(PlayerMode.lowLatency);
-        _audioCacheMap[playerId] = _audio;
-
-        if(!_audioBackgroundCacheList.contains(playerId)){
-          _audioBackgroundCacheList.add(playerId);
-        }
+        await audio.setVolume(1.0);
+        await audio.setPlayerMode(PlayerMode.lowLatency);
+        _audioCacheMap[playerId] = audio;
       }
 
-      if(audioInAppType == AudioInAppType.background){
-        final AudioPlayer _audio = AudioPlayer(playerId: playerId,);
-        await _audio.setVolume(0.0);
-        await _audio.setSource(AssetSource(route));
-        if(Platform.isIOS){
-          await _audio.resume();
-          await _audio.stop();
+      if (audioInAppType == AudioInAppType.background) {
+        final audio = AudioPlayer(playerId: playerId);
+        await audio.setVolume(0.0);
+        await audio.setSource(AssetSource(route));
+        // iOS workaround: prime the audio session by briefly playing at zero volume.
+        if (defaultTargetPlatform == TargetPlatform.iOS) {
+          await audio.resume();
+          await audio.stop();
         }
+        await audio.setVolume(1.0);
+        await audio.setReleaseMode(ReleaseMode.loop);
+        _audioBackgroundCacheMap[playerId] = audio;
+      }
 
-        await _audio.setVolume(1.0);
-
-        await _audio.setReleaseMode(ReleaseMode.loop);
-        _audioBackgroundCacheMap[playerId] = _audio;
-        if(!_audioBackgroundCacheList.contains(playerId)){
-          _audioBackgroundCacheList.add(playerId);
-        }
+      if (!_audioBackgroundCacheList.contains(playerId)) {
+        _audioBackgroundCacheList.add(playerId);
       }
       _audioCacheType[playerId] = audioInAppType;
-    } catch(e){
-      log('ERROR', name: _NameLog);
-      log(e.toString(), name: _NameLog);
+    } catch (e) {
+      log('ERROR', name: _nameLog);
+      log(e.toString(), name: _nameLog);
       return false;
     }
     return true;
   }
 
-  /// Method to start playing the audio
+  /// Starts playing the audio identified by [playerId].
+  ///
+  /// For [AudioInAppType.determined] audio: plays once and stops.
+  /// For [AudioInAppType.background] audio: starts looping. Multiple background
+  /// audios can play simultaneously. Use [stopBackground] to stop all, or
+  /// [stop] to stop a specific one.
+  ///
+  /// Returns `false` if audio permission is disabled or the player is not cached.
   Future<bool> play({
     required String playerId,
-  }) async{
-    if(!_audioPermission) return false;
-    if(!_audioPermissionUser) return false;
-    log('play $playerId', name: _NameLog);
-    if(! await _checkExistCache(playerId)) return false;
-    if(_audioCacheType[playerId] == AudioInAppType.background){
+  }) async {
+    if (!_audioPermission) return false;
+    if (!_audioPermissionUser) return false;
+    log('play $playerId', name: _nameLog);
+    if (!await _checkExistCache(playerId)) return false;
+    if (_audioCacheType[playerId] == AudioInAppType.background) {
       await _playBackground(playerId);
     }
-    if(_audioCacheType[playerId] == AudioInAppType.determined){
+    if (_audioCacheType[playerId] == AudioInAppType.determined) {
       await _playDetermined(playerId);
     }
     return true;
   }
 
-  /// Method to stop the audio
+  /// Stops the audio identified by [playerId].
+  ///
+  /// Works for both determined and background audio types.
+  /// Other background audios will continue playing unaffected.
+  ///
+  /// Returns `false` if the player is not cached.
   Future<bool> stop({
     required String playerId,
-  }) async{
-    log('stop $playerId', name: _NameLog);
-    if(! await _checkExistCache(playerId)) return false;
-    if(_audioCacheType[playerId] == AudioInAppType.background){
-      await _audioBackgroundCacheMap[playerId].stop();
+  }) async {
+    log('stop $playerId', name: _nameLog);
+    if (!await _checkExistCache(playerId)) return false;
+    if (_audioCacheType[playerId] == AudioInAppType.background) {
+      final player = _audioBackgroundCacheMap[playerId];
+      if (player != null) await player.stop();
+      _audioBackgroundPlayingIds.remove(playerId);
     }
-    if(_audioCacheType[playerId] == AudioInAppType.determined){
-      await _audioCacheMap[playerId].stop();
+    if (_audioCacheType[playerId] == AudioInAppType.determined) {
+      final player = _audioCacheMap[playerId];
+      if (player != null) await player.stop();
     }
     return true;
   }
 
-
-  /// Method to stop background audio no matter what audio is playing
-  Future<bool> stopBackground() async{
-    _audioBackgroundCacheList.forEach((String itemPlayerId) async {
-      if(_audioBackgroundCacheMap[itemPlayerId] != null){
-        await _audioBackgroundCacheMap[itemPlayerId].stop();
+  /// Stops all background audio that is currently playing.
+  ///
+  /// Determined (one-shot) audios are not affected.
+  Future<bool> stopBackground() async {
+    for (final itemPlayerId in _audioBackgroundCacheList) {
+      final player = _audioBackgroundCacheMap[itemPlayerId];
+      if (player != null) {
+        await player.stop();
       }
-    });
+    }
+    _audioBackgroundPlayingIds.clear();
     return true;
   }
 
-  Future<bool> _checkExistCache(String playerId) async{
-    if(_audioCacheType[playerId] == null){
-      log('ERROR', name: _NameLog);
-      log('PlayerID $playerId not is cached', name: _NameLog);
-      log('Call the function "createNewAudioCache"', name: _NameLog);
-      return false;
-    }
-
-    return true;
-  }
-
-  Future<void> _playDetermined(String playerId) async {
-    log('_playDetermined $playerId', name: _NameLog);
-    if(_audioCacheMap[playerId].state == PlayerState.playing){
-      await _audioCacheMap[playerId].stop();
-    }
-    await _audioCacheMap[playerId].resume();
-  }
-
-  Future<void> _playBackground(String playerId) async {
-    _audioBackgroundCacheList.forEach((String itemPlayerId) async {
-      if(_audioBackgroundCacheMap[itemPlayerId] != null){
-        await _audioBackgroundCacheMap[itemPlayerId].stop();
+  /// Changes the audio volume for [playerId]. Value between 0.0 and 1.0.
+  ///
+  /// Works independently per audio — changing one does not affect others.
+  Future<void> setVol(String playerId, double vol) async {
+    log('setVol $playerId', name: _nameLog);
+    if (!await _checkExistCache(playerId)) return;
+    if (_audioCacheType[playerId] == AudioInAppType.background) {
+      final player = _audioBackgroundCacheMap[playerId];
+      if (player != null) {
+        await player.setVolume(vol);
       }
-    });
-    log('_playBackground $playerId', name: _NameLog);
-    await _audioBackgroundCacheMap[playerId].resume();
+    }
+    if (_audioCacheType[playerId] == AudioInAppType.determined) {
+      final player = _audioCacheMap[playerId];
+      if (player != null) {
+        await player.setVolume(vol);
+      }
+    }
   }
 
-  Map<String, dynamic> get audioCacheMap => _audioCacheMap;
+  /// Removes the audio from the cache and releases its resources.
+  ///
+  /// The audio will no longer play until it is re-cached using [createNewAudioCache].
+  ///
+  /// Returns `false` if the player is not cached.
+  Future<bool> removeAudio(String playerId) async {
+    log('removeAudio $playerId', name: _nameLog);
+    if (!await _checkExistCache(playerId)) return false;
+    if (_audioCacheType[playerId] == AudioInAppType.background) {
+      final player = _audioBackgroundCacheMap[playerId];
+      if (player != null) await player.dispose();
+      _audioBackgroundCacheMap.remove(playerId);
+      _audioBackgroundPlayingIds.remove(playerId);
+    }
+    if (_audioCacheType[playerId] == AudioInAppType.determined) {
+      final player = _audioCacheMap[playerId];
+      if (player != null) await player.dispose();
+      _audioCacheMap.remove(playerId);
+    }
+    _audioCacheType.remove(playerId);
+    _audioBackgroundCacheList.remove(playerId);
+    return true;
+  }
 
+  /// Returns the set of all cached player IDs (both determined and background).
+  Set<String> get cachedPlayerIds => {
+    ..._audioCacheMap.keys,
+    ..._audioBackgroundCacheMap.keys,
+  };
 
+  /// Whether the user has granted audio permission.
+  ///
+  /// By default set to `true`. If set to `false`, no cached sound will play.
   bool get audioPermissionUser => _audioPermissionUser;
 
-  /// By default it will be set to "true", but if set to "false" no cached sound will play.
   set audioPermissionUser(bool value) {
     _audioPermissionUser = value;
   }
 
-  /// Change the audio volume. Value between 0.0 and 1.0
-  Future<void> setVol(String playerId, double vol) async{
-    log('setVol $playerId', name: _NameLog);
-    if(! await _checkExistCache(playerId)) return;
-    if(_audioCacheType[playerId] == AudioInAppType.background){
-      _audioBackgroundCacheList.forEach((String itemPlayerId) async {
-        if(itemPlayerId == playerId){
-          if(_audioBackgroundCacheMap[itemPlayerId].state == PlayerState.playing){
-            await _audioBackgroundCacheMap[itemPlayerId].pause();
-            _audioBackgroundPlaying['playerID'] = itemPlayerId;
-          }
-          _audioBackgroundCacheMap[playerId].setVolume(vol);
+  // --- Private methods ---
 
-          if(_audioBackgroundPlaying['playerID'] != null){
-            if(vol > 0) {
-              await _audioBackgroundCacheMap[_audioBackgroundPlaying['playerID']].resume();
-            }
-          }
-          _audioBackgroundPlaying = {};
-        }
-      });
+  Future<bool> _checkExistCache(String playerId) async {
+    if (_audioCacheType[playerId] == null) {
+      log('ERROR', name: _nameLog);
+      log('PlayerID $playerId is not cached', name: _nameLog);
+      log('Call the function "createNewAudioCache"', name: _nameLog);
+      return false;
     }
-    if(_audioCacheType[playerId] == AudioInAppType.determined){
-      await _audioCacheMap[playerId].setVolume(vol);
-    }
-
-  }
-
-  /// Delete the audio from the cache. It will no longer play again until it is re-cached using the "createNewAudioCache" method
-  Future<bool> removeAudio(String playerId) async{
-    log('removeAudio $playerId', name: _NameLog);
-    if(!await _checkExistCache(playerId)) return false;
-    if(_audioCacheType[playerId] == AudioInAppType.background){
-      await _audioBackgroundCacheMap[playerId].dispose();
-      _audioBackgroundCacheMap.removeWhere((key, value) => key == playerId);
-    }
-    if(_audioCacheType[playerId] == AudioInAppType.determined){
-      await _audioCacheMap[playerId].dispose();
-      _audioCacheMap.removeWhere((key, value) => key == playerId);
-    }
-    _audioCacheType.removeWhere((key, value) => key == playerId);
-    _audioBackgroundCacheList.remove(playerId);
     return true;
   }
-}
 
-/// This allows a value of type T or T?
-/// to be treated as a value of type T?.
-///
-/// We use this so that APIs that have become
-/// non-nullable can still be used with `!` and `?`
-/// to support older versions of the API as well.
-///
-/// See more: https://docs.flutter.dev/development/tools/sdk/release-notes/release-notes-3.0.0
-T? _ambiguate<T>(T? value) => value;
+  Future<void> _playDetermined(String playerId) async {
+    log('_playDetermined $playerId', name: _nameLog);
+    final player = _audioCacheMap[playerId];
+    if (player == null) return;
+    if (player.state == PlayerState.playing) {
+      await player.stop();
+    }
+    await player.resume();
+  }
+
+  Future<void> _playBackground(String playerId) async {
+    log('_playBackground $playerId', name: _nameLog);
+    final player = _audioBackgroundCacheMap[playerId];
+    if (player == null) return;
+    await player.resume();
+    _audioBackgroundPlayingIds.add(playerId);
+  }
+}
