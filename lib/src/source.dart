@@ -19,6 +19,7 @@ class AudioInApp with WidgetsBindingObserver {
   bool _isRegistered = false;
   bool _audioPermission = true;
   bool _audioPermissionUser = true;
+  bool _audioContextConfigured = false;
 
   final Map<String, AudioInAppType> _audioCacheType = {};
   final Map<String, AudioPlayer> _audioCacheMap = {};
@@ -42,6 +43,33 @@ class AudioInApp with WidgetsBindingObserver {
     }
     _isRegistered = true;
     WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// Configura una sola vez el AudioContext global para que el audio de la app
+  /// no robe el foco a su propia música de fondo. En Android, el foco por
+  /// defecto ('gain') hace que al reproducir un efecto el sistema pause el
+  /// resto de reproductores (incluida la música de fondo de la propia app);
+  /// con 'none' los efectos y la música coexisten. En iOS se mantiene la
+  /// categoría 'playback' (la de por defecto, que ya reproduce correctamente).
+  Future<void> _ensureAudioContext() async {
+    if (_audioContextConfigured) return;
+    _audioContextConfigured = true;
+    try {
+      await AudioPlayer.global.setAudioContext(AudioContext(
+        android: AudioContextAndroid(
+          isSpeakerphoneOn: false,
+          stayAwake: false,
+          contentType: AndroidContentType.music,
+          usageType: AndroidUsageType.media,
+          audioFocus: AndroidAudioFocus.none,
+        ),
+        iOS: AudioContextIOS(
+          category: AVAudioSessionCategory.playback,
+        ),
+      ));
+    } catch (e) {
+      log('No se pudo configurar el AudioContext: $e', name: _nameLog);
+    }
   }
 
   /// Disposes the [WidgetsBinding] observer.
@@ -95,6 +123,7 @@ class AudioInApp with WidgetsBindingObserver {
     required AudioInAppType audioInAppType,
   }) async {
     _initialize();
+    await _ensureAudioContext();
     log('createNewAudioCache $playerId', name: _nameLog);
     try {
       if (audioInAppType == AudioInAppType.determined) {
@@ -118,13 +147,16 @@ class AudioInApp with WidgetsBindingObserver {
         final audio = AudioPlayer(playerId: playerId);
         await audio.setVolume(0.0);
         await audio.setSource(AssetSource(route));
+        // El releaseMode debe fijarse ANTES del prime de iOS: con el release
+        // por defecto, el stop() del prime libera el source en iOS y el
+        // resume() posterior queda mudo. Con loop activo, stop() no lo libera.
+        await audio.setReleaseMode(ReleaseMode.loop);
         // iOS workaround: prime the audio session by briefly playing at zero volume.
         if (defaultTargetPlatform == TargetPlatform.iOS) {
           await audio.resume();
           await audio.stop();
         }
         await audio.setVolume(1.0);
-        await audio.setReleaseMode(ReleaseMode.loop);
         _audioBackgroundCacheMap[playerId] = audio;
       }
 
