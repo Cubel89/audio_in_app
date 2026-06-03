@@ -1,9 +1,8 @@
 import 'dart:developer';
 
 import 'package:audio_in_app/src/audio_in_app_type.dart';
-import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/widgets.dart';
+import 'package:flutter_soloud/flutter_soloud.dart';
 
 /// A singleton class that manages audio playback in your app.
 ///
@@ -14,18 +13,28 @@ import 'package:flutter/widgets.dart';
 ///
 /// Audio is automatically paused when the app goes to background and resumed
 /// when it comes back to foreground.
+///
+/// Powered by the SoLoud (C++) audio engine via the `flutter_soloud` package.
 class AudioInApp with WidgetsBindingObserver {
   static const _nameLog = 'AudioInApp';
   bool _isRegistered = false;
   bool _audioPermission = true;
   bool _audioPermissionUser = true;
-  bool _audioContextConfigured = false;
 
-  final Map<String, AudioInAppType> _audioCacheType = {};
-  final Map<String, AudioPlayer> _audioCacheMap = {};
-  final List<String> _audioBackgroundCacheList = [];
-  final Map<String, AudioPlayer> _audioBackgroundCacheMap = {};
-  final Set<String> _audioBackgroundPlayingIds = {};
+  // Estado del motor: se inicializa una sola vez y de forma idempotente.
+  bool _engineReady = false;
+  Future<void>? _initFuture;
+
+  // playerId -> recurso de audio cargado en memoria (AudioSource).
+  final Map<String, AudioSource> _sources = {};
+  // playerId -> tipo de reproducción.
+  final Map<String, AudioInAppType> _types = {};
+  // playerId -> volumen deseado (por defecto 1.0). Aplica a futuras voces.
+  final Map<String, double> _volumes = {};
+  // playerId -> voz de fondo (loop) actualmente sonando.
+  final Map<String, SoundHandle> _bgHandles = {};
+  // playerId -> última voz one-shot disparada (referencia de coherencia).
+  final Map<String, SoundHandle> _determinedHandles = {};
 
   // Singleton
   static final AudioInApp _singletonAudioInApp = AudioInApp._internal();
@@ -45,34 +54,32 @@ class AudioInApp with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
   }
 
-  /// Configura una sola vez el AudioContext global para que el audio de la app
-  /// no robe el foco a su propia música de fondo. En Android, el foco por
-  /// defecto ('gain') hace que al reproducir un efecto el sistema pause el
-  /// resto de reproductores (incluida la música de fondo de la propia app);
-  /// con 'none' los efectos y la música coexisten. En iOS se mantiene la
-  /// categoría 'playback' (la de por defecto, que ya reproduce correctamente).
-  Future<void> _ensureAudioContext() async {
-    if (_audioContextConfigured) return;
-    _audioContextConfigured = true;
+  /// Inicializa el motor SoLoud una sola vez, de forma idempotente y segura.
+  ///
+  /// Cachea el [Future] de `init()` para que dos cargas en paralelo no llamen
+  /// a `init()` dos veces (una segunda llamada con el motor ya inicializado
+  /// dispararía internamente un `deinit()` que destruiría todo). Si la
+  /// inicialización falla (p. ej. en Windows sin dispositivo de audio), no
+  /// propaga la excepción: devuelve `false` y permite reintentar más adelante.
+  Future<bool> _ensureEngine() async {
+    if (_engineReady) return true;
     try {
-      await AudioPlayer.global.setAudioContext(AudioContext(
-        android: const AudioContextAndroid(
-          isSpeakerphoneOn: false,
-          stayAwake: false,
-          contentType: AndroidContentType.music,
-          usageType: AndroidUsageType.media,
-          audioFocus: AndroidAudioFocus.none,
-        ),
-        iOS: AudioContextIOS(
-          category: AVAudioSessionCategory.playback,
-        ),
-      ));
+      _initFuture ??= SoLoud.instance.init();
+      await _initFuture;
+      _engineReady = true;
+      return true;
     } catch (e) {
-      log('No se pudo configurar el AudioContext: $e', name: _nameLog);
+      log('No se pudo inicializar el motor de audio: $e', name: _nameLog);
+      _initFuture = null; // permite reintentar en una próxima llamada
+      return false;
     }
   }
 
   /// Disposes the [WidgetsBinding] observer.
+  ///
+  /// Note: this does NOT shut down the SoLoud engine. The engine is a global
+  /// singleton that may be shared by other parts of the app, so it is left
+  /// running on purpose.
   void dispose() {
     if (!_isRegistered) {
       return;
@@ -87,10 +94,13 @@ class AudioInApp with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused) {
       log('Paused', name: _nameLog);
       _audioPermission = false;
-      for (final playerId in _audioBackgroundPlayingIds) {
-        final player = _audioBackgroundCacheMap[playerId];
-        if (player != null && player.state == PlayerState.playing) {
-          await player.pause();
+      for (final handle in _bgHandles.values) {
+        try {
+          if (SoLoud.instance.getIsValidVoiceHandle(handle)) {
+            SoLoud.instance.setPause(handle, true);
+          }
+        } catch (e) {
+          log('ERROR pause: $e', name: _nameLog);
         }
       }
     }
@@ -98,10 +108,13 @@ class AudioInApp with WidgetsBindingObserver {
       log('Resumed', name: _nameLog);
       _audioPermission = true;
       if (_audioPermissionUser) {
-        for (final playerId in _audioBackgroundPlayingIds) {
-          final player = _audioBackgroundCacheMap[playerId];
-          if (player != null) {
-            await player.resume();
+        for (final handle in _bgHandles.values) {
+          try {
+            if (SoLoud.instance.getIsValidVoiceHandle(handle)) {
+              SoLoud.instance.setPause(handle, false);
+            }
+          } catch (e) {
+            log('ERROR resume: $e', name: _nameLog);
           }
         }
       }
@@ -113,7 +126,8 @@ class AudioInApp with WidgetsBindingObserver {
   /// [playerId] is a unique identifier to reference this audio later.
   /// [route] is the asset path relative to the `assets` folder (e.g. `'audio/button.wav'`).
   /// [audioInAppType] defines the playback behavior:
-  /// - [AudioInAppType.determined]: One-shot, low latency.
+  /// - [AudioInAppType.determined]: One-shot. Each play creates a new voice
+  ///   (overlapping playback).
   /// - [AudioInAppType.background]: Looping. Multiple backgrounds can play simultaneously.
   ///
   /// Returns `true` if the audio was cached successfully, `false` on error.
@@ -123,47 +137,18 @@ class AudioInApp with WidgetsBindingObserver {
     required AudioInAppType audioInAppType,
   }) async {
     _initialize();
-    await _ensureAudioContext();
+    if (!await _ensureEngine()) return false;
     log('createNewAudioCache $playerId', name: _nameLog);
     try {
-      if (audioInAppType == AudioInAppType.determined) {
-        final audio = AudioPlayer(playerId: playerId);
-        await audio.setVolume(0.0);
-        await audio.setSource(AssetSource(route));
-        await audio.setReleaseMode(ReleaseMode.stop);
-        // iOS workaround: prime the audio session by briefly playing at zero volume.
-        // AVAudioPlayer on iOS requires at least one play cycle before resume()
-        // works reliably from a cached state.
-        if (defaultTargetPlatform == TargetPlatform.iOS) {
-          await audio.resume();
-          await audio.stop();
-        }
-        await audio.setVolume(1.0);
-        await audio.setPlayerMode(PlayerMode.lowLatency);
-        _audioCacheMap[playerId] = audio;
-      }
-
-      if (audioInAppType == AudioInAppType.background) {
-        final audio = AudioPlayer(playerId: playerId);
-        await audio.setVolume(0.0);
-        await audio.setSource(AssetSource(route));
-        // El releaseMode debe fijarse ANTES del prime de iOS: con el release
-        // por defecto, el stop() del prime libera el source en iOS y el
-        // resume() posterior queda mudo. Con loop activo, stop() no lo libera.
-        await audio.setReleaseMode(ReleaseMode.loop);
-        // iOS workaround: prime the audio session by briefly playing at zero volume.
-        if (defaultTargetPlatform == TargetPlatform.iOS) {
-          await audio.resume();
-          await audio.stop();
-        }
-        await audio.setVolume(1.0);
-        _audioBackgroundCacheMap[playerId] = audio;
-      }
-
-      if (!_audioBackgroundCacheList.contains(playerId)) {
-        _audioBackgroundCacheList.add(playerId);
-      }
-      _audioCacheType[playerId] = audioInAppType;
+      // SoLoud.loadAsset usa rootBundle.load(key) con la clave en crudo, NO
+      // antepone 'assets/' como hacía audioplayers (AudioCache prefix:'assets/').
+      // Normalizamos para preservar la convención pública: las apps siguen
+      // pasando rutas como 'audio/button.wav'.
+      final key = route.startsWith('assets/') ? route : 'assets/$route';
+      final source = await SoLoud.instance.loadAsset(key);
+      _sources[playerId] = source;
+      _types[playerId] = audioInAppType;
+      _volumes[playerId] ??= 1.0;
     } catch (e) {
       log('ERROR', name: _nameLog);
       log(e.toString(), name: _nameLog);
@@ -174,7 +159,8 @@ class AudioInApp with WidgetsBindingObserver {
 
   /// Starts playing the audio identified by [playerId].
   ///
-  /// For [AudioInAppType.determined] audio: plays once and stops.
+  /// For [AudioInAppType.determined] audio: plays once. Each call creates a new
+  /// voice, so the same effect can overlap with itself.
   /// For [AudioInAppType.background] audio: starts looping. Multiple background
   /// audios can play simultaneously. Use [stopBackground] to stop all, or
   /// [stop] to stop a specific one.
@@ -187,18 +173,24 @@ class AudioInApp with WidgetsBindingObserver {
     if (!_audioPermissionUser) return false;
     log('play $playerId', name: _nameLog);
     if (!await _checkExistCache(playerId)) return false;
-    if (_audioCacheType[playerId] == AudioInAppType.background) {
-      await _playBackground(playerId);
-    }
-    if (_audioCacheType[playerId] == AudioInAppType.determined) {
-      await _playDetermined(playerId);
+    try {
+      if (_types[playerId] == AudioInAppType.background) {
+        await _playBackground(playerId);
+      }
+      if (_types[playerId] == AudioInAppType.determined) {
+        await _playDetermined(playerId);
+      }
+    } catch (e) {
+      log('ERROR play: $e', name: _nameLog);
+      return false;
     }
     return true;
   }
 
   /// Stops the audio identified by [playerId].
   ///
-  /// Works for both determined and background audio types.
+  /// Works for both determined and background audio types. For determined audio,
+  /// all overlapping voices of that sound are stopped.
   /// Other background audios will continue playing unaffected.
   ///
   /// Returns `false` if the player is not cached.
@@ -207,14 +199,25 @@ class AudioInApp with WidgetsBindingObserver {
   }) async {
     log('stop $playerId', name: _nameLog);
     if (!await _checkExistCache(playerId)) return false;
-    if (_audioCacheType[playerId] == AudioInAppType.background) {
-      final player = _audioBackgroundCacheMap[playerId];
-      if (player != null) await player.stop();
-      _audioBackgroundPlayingIds.remove(playerId);
-    }
-    if (_audioCacheType[playerId] == AudioInAppType.determined) {
-      final player = _audioCacheMap[playerId];
-      if (player != null) await player.stop();
+    try {
+      if (_types[playerId] == AudioInAppType.background) {
+        final handle = _bgHandles.remove(playerId);
+        if (handle != null) await SoLoud.instance.stop(handle);
+      }
+      if (_types[playerId] == AudioInAppType.determined) {
+        // Con solapado pueden coexistir varias voces del mismo efecto: paramos
+        // todas las instancias vivas de ese recurso.
+        final source = _sources[playerId];
+        if (source != null) {
+          for (final handle in source.handles.toList()) {
+            await SoLoud.instance.stop(handle);
+          }
+        }
+        _determinedHandles.remove(playerId);
+      }
+    } catch (e) {
+      log('ERROR stop: $e', name: _nameLog);
+      return false;
     }
     return true;
   }
@@ -227,21 +230,22 @@ class AudioInApp with WidgetsBindingObserver {
   ///
   /// Returns `false` if a [playerId] is provided but is not cached.
   Future<bool> stopBackground({String? playerId}) async {
-    if (playerId != null) {
-      log('stopBackground $playerId', name: _nameLog);
-      if (!await _checkExistCache(playerId)) return false;
-      final player = _audioBackgroundCacheMap[playerId];
-      if (player != null) await player.stop();
-      _audioBackgroundPlayingIds.remove(playerId);
-    } else {
-      log('stopBackground all', name: _nameLog);
-      for (final itemPlayerId in _audioBackgroundCacheList) {
-        final player = _audioBackgroundCacheMap[itemPlayerId];
-        if (player != null) {
-          await player.stop();
+    try {
+      if (playerId != null) {
+        log('stopBackground $playerId', name: _nameLog);
+        if (!await _checkExistCache(playerId)) return false;
+        final handle = _bgHandles.remove(playerId);
+        if (handle != null) await SoLoud.instance.stop(handle);
+      } else {
+        log('stopBackground all', name: _nameLog);
+        for (final handle in _bgHandles.values.toList()) {
+          await SoLoud.instance.stop(handle);
         }
+        _bgHandles.clear();
       }
-      _audioBackgroundPlayingIds.clear();
+    } catch (e) {
+      log('ERROR stopBackground: $e', name: _nameLog);
+      return false;
     }
     return true;
   }
@@ -249,20 +253,24 @@ class AudioInApp with WidgetsBindingObserver {
   /// Changes the audio volume for [playerId]. Value between 0.0 and 1.0.
   ///
   /// Works independently per audio — changing one does not affect others.
+  /// The value is remembered for future plays; if the audio is currently
+  /// playing, the change is applied immediately.
   Future<void> setVol(String playerId, double vol) async {
     log('setVol $playerId', name: _nameLog);
     if (!await _checkExistCache(playerId)) return;
-    if (_audioCacheType[playerId] == AudioInAppType.background) {
-      final player = _audioBackgroundCacheMap[playerId];
-      if (player != null) {
-        await player.setVolume(vol);
+    _volumes[playerId] = vol;
+    try {
+      final bgHandle = _bgHandles[playerId];
+      if (bgHandle != null && SoLoud.instance.getIsValidVoiceHandle(bgHandle)) {
+        SoLoud.instance.setVolume(bgHandle, vol);
       }
-    }
-    if (_audioCacheType[playerId] == AudioInAppType.determined) {
-      final player = _audioCacheMap[playerId];
-      if (player != null) {
-        await player.setVolume(vol);
+      final detHandle = _determinedHandles[playerId];
+      if (detHandle != null &&
+          SoLoud.instance.getIsValidVoiceHandle(detHandle)) {
+        SoLoud.instance.setVolume(detHandle, vol);
       }
+    } catch (e) {
+      log('ERROR setVol: $e', name: _nameLog);
     }
   }
 
@@ -274,27 +282,23 @@ class AudioInApp with WidgetsBindingObserver {
   Future<bool> removeAudio(String playerId) async {
     log('removeAudio $playerId', name: _nameLog);
     if (!await _checkExistCache(playerId)) return false;
-    if (_audioCacheType[playerId] == AudioInAppType.background) {
-      final player = _audioBackgroundCacheMap[playerId];
-      if (player != null) await player.dispose();
-      _audioBackgroundCacheMap.remove(playerId);
-      _audioBackgroundPlayingIds.remove(playerId);
+    try {
+      final source = _sources.remove(playerId);
+      _bgHandles.remove(playerId);
+      _determinedHandles.remove(playerId);
+      _types.remove(playerId);
+      _volumes.remove(playerId);
+      // disposeSource para todas las voces vivas del recurso y libera memoria.
+      if (source != null) await SoLoud.instance.disposeSource(source);
+    } catch (e) {
+      log('ERROR removeAudio: $e', name: _nameLog);
+      return false;
     }
-    if (_audioCacheType[playerId] == AudioInAppType.determined) {
-      final player = _audioCacheMap[playerId];
-      if (player != null) await player.dispose();
-      _audioCacheMap.remove(playerId);
-    }
-    _audioCacheType.remove(playerId);
-    _audioBackgroundCacheList.remove(playerId);
     return true;
   }
 
   /// Returns the set of all cached player IDs (both determined and background).
-  Set<String> get cachedPlayerIds => {
-    ..._audioCacheMap.keys,
-    ..._audioBackgroundCacheMap.keys,
-  };
+  Set<String> get cachedPlayerIds => _sources.keys.toSet();
 
   /// Whether the user has granted audio permission.
   ///
@@ -308,7 +312,7 @@ class AudioInApp with WidgetsBindingObserver {
   // --- Private methods ---
 
   Future<bool> _checkExistCache(String playerId) async {
-    if (_audioCacheType[playerId] == null) {
+    if (_types[playerId] == null) {
       log('ERROR', name: _nameLog);
       log('PlayerID $playerId is not cached', name: _nameLog);
       log('Call the function "createNewAudioCache"', name: _nameLog);
@@ -319,19 +323,29 @@ class AudioInApp with WidgetsBindingObserver {
 
   Future<void> _playDetermined(String playerId) async {
     log('_playDetermined $playerId', name: _nameLog);
-    final player = _audioCacheMap[playerId];
-    if (player == null) return;
-    if (player.state == PlayerState.playing) {
-      await player.stop();
-    }
-    await player.resume();
+    final source = _sources[playerId];
+    if (source == null) return;
+    // Solapado: cada disparo crea una voz nueva (no se reinicia la anterior).
+    final handle =
+        SoLoud.instance.play(source, volume: _volumes[playerId] ?? 1.0);
+    _determinedHandles[playerId] = handle;
   }
 
   Future<void> _playBackground(String playerId) async {
     log('_playBackground $playerId', name: _nameLog);
-    final player = _audioBackgroundCacheMap[playerId];
-    if (player == null) return;
-    await player.resume();
-    _audioBackgroundPlayingIds.add(playerId);
+    final source = _sources[playerId];
+    if (source == null) return;
+    final existing = _bgHandles[playerId];
+    // Idempotente: si la voz de fondo sigue viva, no creamos otra.
+    if (existing != null && SoLoud.instance.getIsValidVoiceHandle(existing)) {
+      if (SoLoud.instance.getPause(existing)) {
+        SoLoud.instance.setPause(existing, false); // estaba pausada: reanudar
+      }
+      return;
+    }
+    // No hay voz viva (nunca sonó o terminó): creamos una nueva en loop.
+    final handle = SoLoud.instance
+        .play(source, volume: _volumes[playerId] ?? 1.0, looping: true);
+    _bgHandles[playerId] = handle;
   }
 }

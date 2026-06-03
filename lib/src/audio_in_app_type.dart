@@ -1,7 +1,7 @@
 /// Defines the type of audio playback behavior.
 enum AudioInAppType {
   /// Short, one-shot audio (button clicks, sound effects).
-  /// Plays once and stops. Uses low latency mode.
+  /// Plays once. Each play creates a new voice, so the same effect can overlap.
   determined,
 
   /// Looping background audio (music, ambient sounds).

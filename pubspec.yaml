@@ -1,17 +1,17 @@
 name: audio_in_app
 description: A Flutter package for playing audio files. Ideal for games or applications with sound.
-version: 3.1.1
-homepage: https://github.com/Cubel89/audio_in_app/tree/3.1.1
-repository: https://github.com/Cubel89/audio_in_app/tree/3.1.1
+version: 4.0.0
+homepage: https://github.com/Cubel89/audio_in_app/tree/4.0.0
+repository: https://github.com/Cubel89/audio_in_app/tree/4.0.0
 
 environment:
-  sdk: '>=3.6.0 <4.0.0'
-  flutter: ">=3.13.0"
+  sdk: '>=3.11.0 <4.0.0'
+  flutter: ">=3.41.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  audioplayers: ^6.5.1
+  flutter_soloud: 4.0.7
 
 dev_dependencies:
   flutter_test:

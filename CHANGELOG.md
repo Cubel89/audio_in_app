@@ -1,3 +1,15 @@
+## 4.0.0
+
+* **BREAKING (engine)**: Replaced the internal `audioplayers` engine with `flutter_soloud` (SoLoud C++ engine via FFI). The public Dart API of `AudioInApp` is unchanged — no call sites need to be updated — but the platform setup requirements below make this a major release.
+* **BREAKING (SDK)**: Minimum Flutter raised to `>=3.41.0` and Dart to `>=3.11.0` (required by `flutter_soloud`).
+* **BREAKING (platform setup)**:
+  * **Web**: add the two `flutter_soloud` scripts to your `web/index.html` (see README).
+  * **Linux**: install the ALSA development library (`libasound2-dev` on Debian/Ubuntu).
+  * **iOS/macOS**: when creating release archives, set the Runner target's *Strip Style* to *Non-Global Symbols*.
+* **Behavior change**: one-shot (`determined`) effects now overlap when retriggered (each play creates a new voice), instead of restarting. Background audio keeps a single looping voice per id.
+* Fixed: short effects no longer fail on Windows release (the original motivation for the migration).
+* Removed the iOS priming workaround and the Android `AudioContext`/audio-focus workaround — no longer needed with SoLoud.
+
 ## 3.1.1
 
 * Removed debug logging that was accidentally shipped in 3.1.0. No functional changes.

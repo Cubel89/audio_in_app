@@ -168,6 +168,36 @@ class _MainActivityState extends State<MainActivity> {
 }
 ```
 
+## Platform setup
+
+Since 4.0.0 the audio engine is [flutter_soloud](https://pub.dev/packages/flutter_soloud) (SoLoud C++ via FFI). Some platforms need extra setup:
+
+### Web
+
+Add these two scripts to your `web/index.html`, inside `<head>`:
+
+```html
+<script src="assets/packages/flutter_soloud/web/libflutter_soloud_plugin.js" defer></script>
+<script src="assets/packages/flutter_soloud/web/init_module.dart.js" defer></script>
+```
+
+### Linux
+
+Install the ALSA development library:
+
+```bash
+sudo apt-get install libasound2-dev   # Debian/Ubuntu
+# alsa-lib (Arch) · alsa-devel (openSUSE)
+```
+
+### iOS / macOS
+
+When creating **release archives** in Xcode, set the `Runner` target's **Strip Style** to **Non-Global Symbols** (Build Settings → Deployment), so the native FFI symbols are not stripped.
+
+### Android / Windows
+
+No extra setup: the native engine is built automatically via CMake.
+
 ## Additional information
 
-This package uses the [audioplayers](https://pub.dev/packages/audioplayers) 6.x package and tries to make things easier for new users. Feel free to collaborate to add new features or improve part of the code currently created. Any help will be welcome.
+This package uses the [flutter_soloud](https://pub.dev/packages/flutter_soloud) engine under the hood and tries to make things easier for new users. Feel free to collaborate to add new features or improve part of the code currently created. Any help will be welcome.
