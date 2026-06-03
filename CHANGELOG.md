@@ -1,3 +1,8 @@
+## 3.1.0
+
+* Fixed: background music was silent on iOS. The release mode is now set before the iOS priming step; with the default release mode, the priming `stop()` released the player's source and the later `resume()` produced no sound.
+* Fixed: on Android, one-shot effects stole the audio focus and paused the app's own background music. A global `AudioContext` with `AndroidAudioFocus.none` is now configured so effects and music coexist.
+
 ## 3.0.0
 
 * **BREAKING**: Updated audioplayers from ^5.2.0 to ^6.5.1

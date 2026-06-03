@@ -56,7 +56,7 @@ class AudioInApp with WidgetsBindingObserver {
     _audioContextConfigured = true;
     try {
       await AudioPlayer.global.setAudioContext(AudioContext(
-        android: AudioContextAndroid(
+        android: const AudioContextAndroid(
           isSpeakerphoneOn: false,
           stayAwake: false,
           contentType: AndroidContentType.music,
