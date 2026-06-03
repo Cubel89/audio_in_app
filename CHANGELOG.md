@@ -1,3 +1,7 @@
+## 3.1.1
+
+* Removed debug logging that was accidentally shipped in 3.1.0. No functional changes.
+
 ## 3.1.0
 
 * Fixed: background music was silent on iOS. The release mode is now set before the iOS priming step; with the default release mode, the priming `stop()` released the player's source and the later `resume()` produced no sound.
