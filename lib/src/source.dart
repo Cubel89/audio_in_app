@@ -1,6 +1,7 @@
 import 'dart:developer';
 
 import 'package:audio_in_app/src/audio_in_app_type.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
 
@@ -92,7 +93,7 @@ class AudioInApp with WidgetsBindingObserver {
   Future<void> didChangeAppLifecycleState(AppLifecycleState state) async {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.paused) {
-      log('Paused', name: _nameLog);
+      _logDebug('Paused');
       _audioPermission = false;
       for (final handle in _bgHandles.values) {
         try {
@@ -105,7 +106,7 @@ class AudioInApp with WidgetsBindingObserver {
       }
     }
     if (state == AppLifecycleState.resumed) {
-      log('Resumed', name: _nameLog);
+      _logDebug('Resumed');
       _audioPermission = true;
       if (_audioPermissionUser) {
         for (final handle in _bgHandles.values) {
@@ -138,7 +139,7 @@ class AudioInApp with WidgetsBindingObserver {
   }) async {
     _initialize();
     if (!await _ensureEngine()) return false;
-    log('createNewAudioCache $playerId', name: _nameLog);
+    _logDebug('createNewAudioCache $playerId');
     try {
       // SoLoud.loadAsset usa rootBundle.load(key) con la clave en crudo, NO
       // antepone 'assets/' como hacía audioplayers (AudioCache prefix:'assets/').
@@ -171,7 +172,7 @@ class AudioInApp with WidgetsBindingObserver {
   }) async {
     if (!_audioPermission) return false;
     if (!_audioPermissionUser) return false;
-    log('play $playerId', name: _nameLog);
+    _logDebug('play $playerId');
     if (!await _checkExistCache(playerId)) return false;
     try {
       if (_types[playerId] == AudioInAppType.background) {
@@ -197,7 +198,7 @@ class AudioInApp with WidgetsBindingObserver {
   Future<bool> stop({
     required String playerId,
   }) async {
-    log('stop $playerId', name: _nameLog);
+    _logDebug('stop $playerId');
     if (!await _checkExistCache(playerId)) return false;
     try {
       if (_types[playerId] == AudioInAppType.background) {
@@ -232,12 +233,12 @@ class AudioInApp with WidgetsBindingObserver {
   Future<bool> stopBackground({String? playerId}) async {
     try {
       if (playerId != null) {
-        log('stopBackground $playerId', name: _nameLog);
+        _logDebug('stopBackground $playerId');
         if (!await _checkExistCache(playerId)) return false;
         final handle = _bgHandles.remove(playerId);
         if (handle != null) await SoLoud.instance.stop(handle);
       } else {
-        log('stopBackground all', name: _nameLog);
+        _logDebug('stopBackground all');
         for (final handle in _bgHandles.values.toList()) {
           await SoLoud.instance.stop(handle);
         }
@@ -256,7 +257,7 @@ class AudioInApp with WidgetsBindingObserver {
   /// The value is remembered for future plays; if the audio is currently
   /// playing, the change is applied immediately.
   Future<void> setVol(String playerId, double vol) async {
-    log('setVol $playerId', name: _nameLog);
+    _logDebug('setVol $playerId');
     if (!await _checkExistCache(playerId)) return;
     _volumes[playerId] = vol;
     try {
@@ -280,7 +281,7 @@ class AudioInApp with WidgetsBindingObserver {
   ///
   /// Returns `false` if the player is not cached.
   Future<bool> removeAudio(String playerId) async {
-    log('removeAudio $playerId', name: _nameLog);
+    _logDebug('removeAudio $playerId');
     if (!await _checkExistCache(playerId)) return false;
     try {
       final source = _sources.remove(playerId);
@@ -311,6 +312,13 @@ class AudioInApp with WidgetsBindingObserver {
 
   // --- Private methods ---
 
+  /// Traza informativa: solo se emite en modo debug para no ensuciar los logs
+  /// en release (estas trazas se disparan en cada operación de audio). Los
+  /// `log()` de error sí se mantienen siempre.
+  void _logDebug(String message) {
+    if (kDebugMode) log(message, name: _nameLog);
+  }
+
   Future<bool> _checkExistCache(String playerId) async {
     if (_types[playerId] == null) {
       log('ERROR', name: _nameLog);
@@ -322,7 +330,7 @@ class AudioInApp with WidgetsBindingObserver {
   }
 
   Future<void> _playDetermined(String playerId) async {
-    log('_playDetermined $playerId', name: _nameLog);
+    _logDebug('_playDetermined $playerId');
     final source = _sources[playerId];
     if (source == null) return;
     // Solapado: cada disparo crea una voz nueva (no se reinicia la anterior).
@@ -332,7 +340,7 @@ class AudioInApp with WidgetsBindingObserver {
   }
 
   Future<void> _playBackground(String playerId) async {
-    log('_playBackground $playerId', name: _nameLog);
+    _logDebug('_playBackground $playerId');
     final source = _sources[playerId];
     if (source == null) return;
     final existing = _bgHandles[playerId];
