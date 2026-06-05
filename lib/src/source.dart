@@ -239,10 +239,16 @@ class AudioInApp with WidgetsBindingObserver {
         if (handle != null) await SoLoud.instance.stop(handle);
       } else {
         _logDebug('stopBackground all');
-        for (final handle in _bgHandles.values.toList()) {
-          await SoLoud.instance.stop(handle);
+        // Capturamos las claves vivas AHORA y las quitamos una a una. NO usamos
+        // clear() al final: como hay `await` entre stops, otra música podría
+        // registrarse en _bgHandles durante este bucle (p. ej. la de partida
+        // que arranca justo tras parar la del menú). Un clear() ciego la
+        // borraría del mapa dejándola sonando "huérfana" e imposible de parar
+        // luego. Quitando solo las que existían al entrar, lo nuevo se respeta.
+        for (final id in _bgHandles.keys.toList()) {
+          final handle = _bgHandles.remove(id);
+          if (handle != null) await SoLoud.instance.stop(handle);
         }
-        _bgHandles.clear();
       }
     } catch (e) {
       log('ERROR stopBackground: $e', name: _nameLog);
