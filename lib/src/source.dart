@@ -125,29 +125,44 @@ class AudioInApp with WidgetsBindingObserver {
   /// Adds an audio file to the cache. This is required before playing.
   ///
   /// [playerId] is a unique identifier to reference this audio later.
-  /// [route] is the asset path relative to the `assets` folder (e.g. `'audio/button.wav'`).
+  /// [route] is, depending on [source]:
+  /// - [AudioInAppSource.asset] (default): the asset path relative to the
+  ///   `assets` folder (e.g. `'audio/button.wav'`).
+  /// - [AudioInAppSource.file]: an absolute path to a local file on the device
+  ///   filesystem (e.g. `'/data/.../audios/note.m4a'`).
   /// [audioInAppType] defines the playback behavior:
   /// - [AudioInAppType.determined]: One-shot. Each play creates a new voice
   ///   (overlapping playback).
   /// - [AudioInAppType.background]: Looping. Multiple backgrounds can play simultaneously.
+  /// [source] selects where the audio is loaded from. Defaults to
+  /// [AudioInAppSource.asset] to preserve backwards compatibility: existing
+  /// callers that omit it keep loading from assets exactly as before.
   ///
   /// Returns `true` if the audio was cached successfully, `false` on error.
   Future<bool> createNewAudioCache({
     required String playerId,
     required String route,
     required AudioInAppType audioInAppType,
+    AudioInAppSource source = AudioInAppSource.asset,
   }) async {
     _initialize();
     if (!await _ensureEngine()) return false;
     _logDebug('createNewAudioCache $playerId');
     try {
-      // SoLoud.loadAsset usa rootBundle.load(key) con la clave en crudo, NO
-      // antepone 'assets/' como hacía audioplayers (AudioCache prefix:'assets/').
-      // Normalizamos para preservar la convención pública: las apps siguen
-      // pasando rutas como 'audio/button.wav'.
-      final key = route.startsWith('assets/') ? route : 'assets/$route';
-      final source = await SoLoud.instance.loadAsset(key);
-      _sources[playerId] = source;
+      final AudioSource audioSource;
+      if (source == AudioInAppSource.file) {
+        // Fichero local del dispositivo: SoLoud lo carga directo desde la ruta
+        // absoluta, sin pasar por el rootBundle de assets.
+        audioSource = await SoLoud.instance.loadFile(route);
+      } else {
+        // SoLoud.loadAsset usa rootBundle.load(key) con la clave en crudo, NO
+        // antepone 'assets/' como hacía audioplayers (AudioCache prefix:'assets/').
+        // Normalizamos para preservar la convención pública: las apps siguen
+        // pasando rutas como 'audio/button.wav'.
+        final key = route.startsWith('assets/') ? route : 'assets/$route';
+        audioSource = await SoLoud.instance.loadAsset(key);
+      }
+      _sources[playerId] = audioSource;
       _types[playerId] = audioInAppType;
       _volumes[playerId] ??= 1.0;
     } catch (e) {
@@ -306,6 +321,23 @@ class AudioInApp with WidgetsBindingObserver {
 
   /// Returns the set of all cached player IDs (both determined and background).
   Set<String> get cachedPlayerIds => _sources.keys.toSet();
+
+  /// Whether the audio identified by [playerId] is currently active.
+  ///
+  /// Checks the last started voice (determined or background) and returns
+  /// `false` once it has finished, so callers can detect completion of a
+  /// one-shot sound (e.g. to reset a play/stop button). Note: a background
+  /// voice that is paused (e.g. while the app is in the background) is still
+  /// considered active and returns `true`.
+  bool isPlaying(String playerId) {
+    final handle = _determinedHandles[playerId] ?? _bgHandles[playerId];
+    if (handle == null) return false;
+    try {
+      return SoLoud.instance.getIsValidVoiceHandle(handle);
+    } catch (_) {
+      return false;
+    }
+  }
 
   /// Whether the user has granted audio permission.
   ///

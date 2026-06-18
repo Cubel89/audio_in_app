@@ -1,3 +1,9 @@
+## 4.1.0
+
+* **New (non-breaking)**: load audio from a local file on the device filesystem via `createNewAudioCache(..., source: AudioInAppSource.file)`, passing an absolute path as `route`. Files are loaded with `SoLoud.loadFile` under the hood, while assets keep using `SoLoud.loadAsset`. Added the `AudioInAppSource { asset, file }` enum; `source` defaults to `AudioInAppSource.asset`.
+* **New (non-breaking)**: `bool isPlaying(String playerId)` returns whether the last started voice (determined or background) is still sounding, so you can detect when a one-shot sound has finished.
+* Fully backwards compatible: the previous API is unchanged. Callers that omit `source` keep loading from assets exactly as before.
+
 ## 4.0.0
 
 * **BREAKING (engine)**: Replaced the internal `audioplayers` engine with `flutter_soloud` (SoLoud C++ engine via FFI). The public Dart API of `AudioInApp` is unchanged — no call sites need to be updated — but the platform setup requirements below make this a major release.

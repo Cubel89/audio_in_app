@@ -64,10 +64,55 @@ await _audioInApp.stopBackground();
 await _audioInApp.setVol('intro1', 0.5);
 ```
 
+### Load audio from a local file
+
+Since 4.1.0 you can play a file that lives on the device filesystem (downloaded, recorded, etc.) instead of a bundled asset. Pass `source: AudioInAppSource.file` and an **absolute path** as `route`. This is non-breaking: `source` defaults to `AudioInAppSource.asset`, so any existing call keeps loading from assets exactly as before.
+
+```dart
+// 'route' must be an ABSOLUTE path to a local file on the device.
+await _audioInApp.createNewAudioCache(
+  playerId: 'note',
+  route: '/data/user/0/com.example.app/files/note.m4a',
+  audioInAppType: AudioInAppType.determined,
+  source: AudioInAppSource.file,
+);
+
+await _audioInApp.play(playerId: 'note');
+```
+
+> **Web:** loading from a local file is **not supported on Web** (it relies on
+> `SoLoud.loadFile`, which is unavailable there). On Web, `source:
+> AudioInAppSource.file` fails gracefully and `createNewAudioCache` returns
+> `false` — use bundled assets on Web.
+
+Once cached, you can `play` it as many times as you want, exactly like an asset
+(the `source` only matters when caching).
+
+Bundled assets keep the same call as always (no `source` needed):
+
+```dart
+await _audioInApp.createNewAudioCache(
+  playerId: 'button',
+  route: 'audio/button.wav',
+  audioInAppType: AudioInAppType.determined,
+);
+```
+
+### Check if an audio is still playing
+
+Since 4.1.0 you can ask whether the last started voice for a `playerId` is still sounding with `isPlaying(playerId)`. It returns `false` once the voice has finished, which is handy to detect the end of a one-shot (`determined`) sound, e.g. to reset a play button.
+
+```dart
+final bool stillPlaying = _audioInApp.isPlaying('note');
+if (!stillPlaying) {
+  // The one-shot finished: update your UI here.
+}
+```
+
 
 ### Example
 
-There is a basic example in the [example](https://github.com/Cubel89/audio_in_app/tree/3.0.0/example) folder of the project.
+There is a basic example in the [example](https://github.com/Cubel89/audio_in_app/tree/4.1.0/example) folder of the project.
 <br>
 But here we add a quick example based on the example that is in the project.
 

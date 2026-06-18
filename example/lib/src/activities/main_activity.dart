@@ -1,5 +1,9 @@
+import 'dart:io';
+
 import 'package:audio_in_app/audio_in_app.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:path_provider/path_provider.dart';
 
 class MainActivity extends StatefulWidget {
   const MainActivity({super.key});
@@ -10,6 +14,44 @@ class MainActivity extends StatefulWidget {
 
 class _MainActivityState extends State<MainActivity> {
   final AudioInApp _audioInApp = AudioInApp();
+
+  // Status text for the isPlaying demo.
+  String _isPlayingStatus = 'unknown (press "Check button" )';
+
+  // Whether the local-file demo audio has already been prepared.
+  bool _localFileReady = false;
+
+  /// Copies a bundled asset to a temporary file and loads it as a LOCAL FILE
+  /// (source: AudioInAppSource.file) using an absolute path. This demonstrates
+  /// playing audio that does not live in the app bundle.
+  Future<void> _prepareLocalFile() async {
+    final dir = await getTemporaryDirectory();
+    final filePath = '${dir.path}/button_copy.wav';
+
+    final bytes = await rootBundle.load('assets/audio/button.wav');
+    final file = File(filePath);
+    await file.writeAsBytes(bytes.buffer.asUint8List());
+
+    await _audioInApp.createNewAudioCache(
+      playerId: 'localFile',
+      route: filePath, // absolute path
+      audioInAppType: AudioInAppType.determined,
+      source: AudioInAppSource.file,
+    );
+
+    if (mounted) {
+      setState(() => _localFileReady = true);
+    }
+  }
+
+  void _checkIsPlaying(String playerId) {
+    final playing = _audioInApp.isPlaying(playerId);
+    setState(() {
+      _isPlayingStatus = playing
+          ? '"$playerId" is PLAYING'
+          : '"$playerId" is NOT playing';
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -147,6 +189,60 @@ class _MainActivityState extends State<MainActivity> {
                       ? 'Disable audio (permission ON)'
                       : 'Enable audio (permission OFF)',
                 ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Local file source section (new in 4.1.0)
+              const Text(
+                'Local File Source',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Copy a bundled asset to a temp file and play it from an '
+                'absolute path with source: AudioInAppSource.file:',
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                key: const Key('btn_prepare_local_file'),
+                onPressed: _prepareLocalFile,
+                child: const Text('Prepare local file'),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                key: const Key('btn_play_local_file'),
+                onPressed: _localFileReady
+                    ? () => _audioInApp.play(playerId: 'localFile')
+                    : null,
+                child: const Text('Play local file'),
+              ),
+
+              const SizedBox(height: 24),
+
+              // isPlaying section (new in 4.1.0)
+              const Text(
+                'isPlaying',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text('Check whether a cached audio is still sounding:'),
+              const SizedBox(height: 12),
+              Text(
+                _isPlayingStatus,
+                key: const Key('txt_is_playing_status'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                key: const Key('btn_check_button'),
+                onPressed: () => _checkIsPlaying('button'),
+                child: const Text('Check button'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                key: const Key('btn_check_intro1'),
+                onPressed: () => _checkIsPlaying('intro1'),
+                child: const Text('Check intro 1'),
               ),
             ],
           ),
