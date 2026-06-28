@@ -1,3 +1,7 @@
+## 4.1.1
+
+* **Fix (crash on cold start)**: free the native SoLoud engine on `AppLifecycleState.detached`. The engine is a native (C++) singleton that outlives the Dart isolate within the same process (e.g. Android re-creating the Activity without killing the process). Previously the engine kept its FFI `NativeCallable` listeners pointing at the destroyed isolate, so a later native `voiceEnded`/`stateChanged` aborted the VM with `SIGABRT "Callback invoked after it has been deleted"` on the next cold start. The observer now calls `SoLoud.deinit()` on `detached` (which disposes the native callables). Only on `detached`, never on `paused` (that would silence audio when minimizing or showing an ad). No API changes.
+
 ## 4.1.0
 
 * **New (non-breaking)**: load audio from a local file on the device filesystem via `createNewAudioCache(..., source: AudioInAppSource.file)`, passing an absolute path as `route`. Files are loaded with `SoLoud.loadFile` under the hood, while assets keep using `SoLoud.loadAsset`. Added the `AudioInAppSource { asset, file }` enum; `source` defaults to `AudioInAppSource.asset`.

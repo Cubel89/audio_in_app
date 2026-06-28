@@ -120,6 +120,32 @@ class AudioInApp with WidgetsBindingObserver {
         }
       }
     }
+    if (state == AppLifecycleState.detached) {
+      // El isolate se está destruyendo. El motor SoLoud es un singleton NATIVO
+      // (C++) que sobrevive al teardown del isolate dentro del mismo proceso
+      // (p. ej. Android al re-crear la Activity sin matar el proceso). Si no
+      // cerramos aquí el motor, sus `NativeCallable` de FFI siguen registrados
+      // apuntando a un isolate ya muerto y, cuando el hilo de audio nativo
+      // dispara voiceEnded/stateChanged, el VM aborta: SIGABRT "Callback
+      // invoked after it has been deleted" en el siguiente arranque en frío.
+      // `deinit()` libera esos callbacks (disposeNativeCallables internamente).
+      // Solo en `detached` (no en `paused`): en `paused` deinit mataría el audio
+      // al minimizar o al mostrar un anuncio.
+      _logDebug('Detached');
+      try {
+        if (SoLoud.instance.isInitialized) {
+          SoLoud.instance.deinit();
+        }
+      } catch (e) {
+        log('ERROR deinit on detached: $e', name: _nameLog);
+      }
+      _engineReady = false;
+      _initFuture = null;
+      _bgHandles.clear();
+      _determinedHandles.clear();
+      _sources.clear();
+      _types.clear();
+    }
   }
 
   /// Adds an audio file to the cache. This is required before playing.
