@@ -1,0 +1,3 @@
+# Documentación interna de planificación/validación/tracking: no debe entrar en
+# el paquete publicado en pub.dev. No aporta nada al consumidor y añade peso.
+docs/

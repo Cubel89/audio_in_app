@@ -1,3 +1,31 @@
+## 4.2.0
+
+* **New (non-breaking): background channels with crossfade.** A channel is an
+  exclusive logical line of background playback that holds one active track and
+  crossfades smoothly when you switch tracks. Backed by a real `flutter_soloud`
+  mixing bus per channel (native master volume + fades). New API:
+  * `createChannel({channelId, volume})` — idempotent; re-creating updates volume.
+  * `playChannel({channelId, playerId, transitionDuration})` — instant switch with
+    `Duration.zero`, crossfade otherwise. The `Future` completes once the transition
+    is safely started, not after the full fade. Rapid changes (A→B→C, A→B→A) resolve
+    to a single surviving track with no orphan voices.
+  * `stopChannel({channelId, fadeOutDuration})` — fades tracks out; channel stays reusable.
+  * `pauseChannel` / `resumeChannel` — compose with the automatic
+    background/foreground pause (a channel resumes only when no pause reason remains).
+  * `setChannelVolume({channelId, volume})` — master volume without cancelling fades.
+  * `activePlayerIdInChannel`, `isChannelPlaying`, `isChannelPaused` — queries.
+* **Compatibility:** the previous API is unchanged. `stop`, `stopBackground(playerId:)`,
+  `setVol` and `isPlaying` now also reach voices playing inside channels, so the same
+  `playerId` can play both as a plain background and inside a channel simultaneously.
+  Recaching a `playerId` that is active in a channel is rejected (returns `false`).
+* **Validation:** invalid arguments (empty id, volume outside `0..1`, negative
+  duration) throw `ArgumentError`; engine/operational errors return `false`.
+* **Internals:** the channel state machine is a pure-Dart reducer covered by unit
+  tests; the SoLoud engine is isolated behind an injectable backend. Verified with
+  unit tests plus integration tests on macOS (native) exercising the real mixing bus,
+  crossfade, legacy/channel coexistence and regression of the 4.1.x behaviour. Web
+  compiles (Wasm dry run passes); channel runtime on Web is not yet verified.
+
 ## 4.1.1
 
 * **Fix (crash on cold start)**: free the native SoLoud engine on `AppLifecycleState.detached`. The engine is a native (C++) singleton that outlives the Dart isolate within the same process (e.g. Android re-creating the Activity without killing the process). Previously the engine kept its FFI `NativeCallable` listeners pointing at the destroyed isolate, so a later native `voiceEnded`/`stateChanged` aborted the VM with `SIGABRT "Callback invoked after it has been deleted"` on the next cold start. The observer now calls `SoLoud.deinit()` on `detached` (which disposes the native callables). Only on `detached`, never on `paused` (that would silence audio when minimizing or showing an ad). No API changes.

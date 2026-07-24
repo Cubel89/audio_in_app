@@ -1,6 +1,11 @@
 import 'dart:developer';
 
 import 'package:audio_in_app/src/audio_in_app_type.dart';
+import 'package:audio_in_app/src/background_channel_runtime.dart';
+import 'package:audio_in_app/src/background_channel_state.dart';
+import 'package:audio_in_app/src/channel_scheduler.dart';
+import 'package:audio_in_app/src/serial_executor.dart';
+import 'package:audio_in_app/src/soloud_channel_audio_backend.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
@@ -36,6 +41,11 @@ class AudioInApp with WidgetsBindingObserver {
   final Map<String, SoundHandle> _bgHandles = {};
   // playerId -> última voz one-shot disparada (referencia de coherencia).
   final Map<String, SoundHandle> _determinedHandles = {};
+  final Map<String, BackgroundChannelRuntime<AudioSource, Bus, SoundHandle>>
+  _channels = {};
+  final SoLoudChannelAudioBackend _channelBackend =
+      const SoLoudChannelAudioBackend();
+  SerialExecutor _channelExecutor = SerialExecutor();
 
   // Singleton
   static final AudioInApp _singletonAudioInApp = AudioInApp._internal();
@@ -65,6 +75,9 @@ class AudioInApp with WidgetsBindingObserver {
   Future<bool> _ensureEngine() async {
     if (_engineReady) return true;
     try {
+      if (_channelExecutor.isClosed) {
+        _channelExecutor = SerialExecutor();
+      }
       _initFuture ??= SoLoud.instance.init();
       await _initFuture;
       _engineReady = true;
@@ -104,6 +117,13 @@ class AudioInApp with WidgetsBindingObserver {
           log('ERROR pause: $e', name: _nameLog);
         }
       }
+      if (!_channelExecutor.isClosed) {
+        await _channelExecutor.run(() async {
+          for (final channel in _channels.values) {
+            await channel.pause(ChannelPauseReason.lifecycle);
+          }
+        });
+      }
     }
     if (state == AppLifecycleState.resumed) {
       _logDebug('Resumed');
@@ -117,6 +137,13 @@ class AudioInApp with WidgetsBindingObserver {
           } catch (e) {
             log('ERROR resume: $e', name: _nameLog);
           }
+        }
+        if (!_channelExecutor.isClosed) {
+          await _channelExecutor.run(() async {
+            for (final channel in _channels.values) {
+              await channel.resume(ChannelPauseReason.lifecycle);
+            }
+          });
         }
       }
     }
@@ -133,6 +160,15 @@ class AudioInApp with WidgetsBindingObserver {
       // al minimizar o al mostrar un anuncio.
       _logDebug('Detached');
       try {
+        if (!_channelExecutor.isClosed) {
+          await _channelExecutor.run(() async {
+            for (final channel in _channels.values.toList()) {
+              await channel.dispose();
+            }
+            _channels.clear();
+          });
+          await _channelExecutor.close();
+        }
         if (SoLoud.instance.isInitialized) {
           SoLoud.instance.deinit();
         }
@@ -174,6 +210,13 @@ class AudioInApp with WidgetsBindingObserver {
     _initialize();
     if (!await _ensureEngine()) return false;
     _logDebug('createNewAudioCache $playerId');
+    if (_channels.values.any((channel) => channel.containsPlayer(playerId))) {
+      log(
+        'PlayerID $playerId is active in a channel and cannot be recached',
+        name: _nameLog,
+      );
+      return false;
+    }
     try {
       final AudioSource audioSource;
       if (source == AudioInAppSource.file) {
@@ -199,6 +242,163 @@ class AudioInApp with WidgetsBindingObserver {
     return true;
   }
 
+  /// Creates an exclusive logical background channel.
+  ///
+  /// Calling this again with the same [channelId] is idempotent and updates its
+  /// master [volume]. The channel remains available until the engine is
+  /// detached. Invalid arguments throw [ArgumentError]; engine failures return
+  /// `false`.
+  Future<bool> createChannel({
+    required String channelId,
+    double volume = 1,
+  }) async {
+    _validateChannelId(channelId);
+    _validateVolume(volume);
+    _initialize();
+    if (!await _ensureEngine()) return false;
+    try {
+      return await _channelExecutor.run(() async {
+        final existing = _channels[channelId];
+        if (existing != null) return existing.setVolume(volume);
+        final channel = BackgroundChannelRuntime<AudioSource, Bus, SoundHandle>(
+          channelId: channelId,
+          volume: volume,
+          backend: _channelBackend,
+          scheduler: TimerChannelScheduler(),
+          executor: _channelExecutor,
+          sourceFor: (playerId) => _sources[playerId],
+          trackVolumeFor: (playerId) => _volumes[playerId] ?? 1,
+        );
+        _channels[channelId] = channel;
+        return true;
+      });
+    } catch (e) {
+      log('ERROR createChannel: $e', name: _nameLog);
+      return false;
+    }
+  }
+
+  /// Plays [playerId] in an exclusive background channel.
+  ///
+  /// If another track is active, both are crossfaded over
+  /// [transitionDuration]. The future completes once the transition is safely
+  /// started, not after its duration. Only cached background audio is accepted.
+  Future<bool> playChannel({
+    required String channelId,
+    required String playerId,
+    Duration transitionDuration = Duration.zero,
+  }) async {
+    _validateChannelId(channelId);
+    _validatePlayerIdArgument(playerId);
+    _validateDuration(transitionDuration);
+    if (!_audioPermission || !_audioPermissionUser) return false;
+    if (!await _checkExistCache(playerId)) return false;
+    if (_types[playerId] != AudioInAppType.background) return false;
+    try {
+      return await _channelExecutor.run(() async {
+        final channel = _channels[channelId];
+        if (channel == null) return false;
+        return channel.play(
+          playerId: playerId,
+          transitionDuration: transitionDuration,
+        );
+      });
+    } catch (e) {
+      log('ERROR playChannel: $e', name: _nameLog);
+      return false;
+    }
+  }
+
+  /// Stops every voice managed by [channelId].
+  ///
+  /// With a positive [fadeOutDuration], voices fade out while the channel
+  /// remains reusable.
+  Future<bool> stopChannel({
+    required String channelId,
+    Duration fadeOutDuration = Duration.zero,
+  }) async {
+    _validateChannelId(channelId);
+    _validateDuration(fadeOutDuration);
+    try {
+      return await _channelExecutor.run(() async {
+        final channel = _channels[channelId];
+        if (channel == null) return false;
+        return channel.stop(fadeOutDuration: fadeOutDuration);
+      });
+    } catch (e) {
+      log('ERROR stopChannel: $e', name: _nameLog);
+      return false;
+    }
+  }
+
+  /// Pauses all voices and transition timers in [channelId].
+  Future<bool> pauseChannel({required String channelId}) async {
+    _validateChannelId(channelId);
+    try {
+      return await _channelExecutor.run(() async {
+        final channel = _channels[channelId];
+        if (channel == null) return false;
+        return channel.pause(ChannelPauseReason.channel);
+      });
+    } catch (e) {
+      log('ERROR pauseChannel: $e', name: _nameLog);
+      return false;
+    }
+  }
+
+  /// Resumes [channelId] unless another pause reason is still active.
+  Future<bool> resumeChannel({required String channelId}) async {
+    _validateChannelId(channelId);
+    if (!_audioPermission || !_audioPermissionUser) return false;
+    try {
+      return await _channelExecutor.run(() async {
+        final channel = _channels[channelId];
+        if (channel == null) return false;
+        return channel.resume(ChannelPauseReason.channel);
+      });
+    } catch (e) {
+      log('ERROR resumeChannel: $e', name: _nameLog);
+      return false;
+    }
+  }
+
+  /// Changes the master volume of [channelId] without canceling child fades.
+  Future<bool> setChannelVolume({
+    required String channelId,
+    required double volume,
+  }) async {
+    _validateChannelId(channelId);
+    _validateVolume(volume);
+    try {
+      return await _channelExecutor.run(() async {
+        final channel = _channels[channelId];
+        if (channel == null) return false;
+        return channel.setVolume(volume);
+      });
+    } catch (e) {
+      log('ERROR setChannelVolume: $e', name: _nameLog);
+      return false;
+    }
+  }
+
+  /// Current logical target in [channelId], or `null` if none is committed.
+  String? activePlayerIdInChannel(String channelId) {
+    _validateChannelId(channelId);
+    return _channels[channelId]?.activePlayerId;
+  }
+
+  /// Whether [channelId] owns at least one valid background voice.
+  bool isChannelPlaying(String channelId) {
+    _validateChannelId(channelId);
+    return _channels[channelId]?.isPlaying ?? false;
+  }
+
+  /// Whether [channelId] is effectively paused for any reason.
+  bool isChannelPaused(String channelId) {
+    _validateChannelId(channelId);
+    return _channels[channelId]?.isPaused ?? false;
+  }
+
   /// Starts playing the audio identified by [playerId].
   ///
   /// For [AudioInAppType.determined] audio: plays once. Each call creates a new
@@ -208,9 +408,7 @@ class AudioInApp with WidgetsBindingObserver {
   /// [stop] to stop a specific one.
   ///
   /// Returns `false` if audio permission is disabled or the player is not cached.
-  Future<bool> play({
-    required String playerId,
-  }) async {
+  Future<bool> play({required String playerId}) async {
     if (!_audioPermission) return false;
     if (!_audioPermissionUser) return false;
     _logDebug('play $playerId');
@@ -236,12 +434,17 @@ class AudioInApp with WidgetsBindingObserver {
   /// Other background audios will continue playing unaffected.
   ///
   /// Returns `false` if the player is not cached.
-  Future<bool> stop({
-    required String playerId,
-  }) async {
+  Future<bool> stop({required String playerId}) async {
     _logDebug('stop $playerId');
     if (!await _checkExistCache(playerId)) return false;
     try {
+      if (!_channelExecutor.isClosed) {
+        await _channelExecutor.run(() async {
+          for (final channel in _channels.values) {
+            await channel.removePlayer(playerId);
+          }
+        });
+      }
       if (_types[playerId] == AudioInAppType.background) {
         final handle = _bgHandles.remove(playerId);
         if (handle != null) await SoLoud.instance.stop(handle);
@@ -276,10 +479,24 @@ class AudioInApp with WidgetsBindingObserver {
       if (playerId != null) {
         _logDebug('stopBackground $playerId');
         if (!await _checkExistCache(playerId)) return false;
+        if (!_channelExecutor.isClosed) {
+          await _channelExecutor.run(() async {
+            for (final channel in _channels.values) {
+              await channel.removePlayer(playerId);
+            }
+          });
+        }
         final handle = _bgHandles.remove(playerId);
         if (handle != null) await SoLoud.instance.stop(handle);
       } else {
         _logDebug('stopBackground all');
+        if (!_channelExecutor.isClosed) {
+          await _channelExecutor.run(() async {
+            for (final channel in _channels.values.toList()) {
+              await channel.stop(fadeOutDuration: Duration.zero);
+            }
+          });
+        }
         // Capturamos las claves vivas AHORA y las quitamos una a una. NO usamos
         // clear() al final: como hay `await` entre stops, otra música podría
         // registrarse en _bgHandles durante este bucle (p. ej. la de partida
@@ -308,6 +525,13 @@ class AudioInApp with WidgetsBindingObserver {
     if (!await _checkExistCache(playerId)) return;
     _volumes[playerId] = vol;
     try {
+      if (!_channelExecutor.isClosed) {
+        await _channelExecutor.run(() async {
+          for (final channel in _channels.values) {
+            await channel.refreshTrackVolume(playerId);
+          }
+        });
+      }
       final bgHandle = _bgHandles[playerId];
       if (bgHandle != null && SoLoud.instance.getIsValidVoiceHandle(bgHandle)) {
         SoLoud.instance.setVolume(bgHandle, vol);
@@ -331,6 +555,13 @@ class AudioInApp with WidgetsBindingObserver {
     _logDebug('removeAudio $playerId');
     if (!await _checkExistCache(playerId)) return false;
     try {
+      if (!_channelExecutor.isClosed) {
+        await _channelExecutor.run(() async {
+          for (final channel in _channels.values) {
+            await channel.removePlayer(playerId);
+          }
+        });
+      }
       final source = _sources.remove(playerId);
       _bgHandles.remove(playerId);
       _determinedHandles.remove(playerId);
@@ -356,6 +587,9 @@ class AudioInApp with WidgetsBindingObserver {
   /// voice that is paused (e.g. while the app is in the background) is still
   /// considered active and returns `true`.
   bool isPlaying(String playerId) {
+    for (final channel in _channels.values) {
+      if (channel.isPlayerActive(playerId)) return true;
+    }
     final handle = _determinedHandles[playerId] ?? _bgHandles[playerId];
     if (handle == null) return false;
     try {
@@ -375,6 +609,30 @@ class AudioInApp with WidgetsBindingObserver {
   }
 
   // --- Private methods ---
+
+  static void _validateChannelId(String channelId) {
+    if (channelId.trim().isEmpty) {
+      throw ArgumentError.value(channelId, 'channelId', 'Cannot be empty.');
+    }
+  }
+
+  static void _validatePlayerIdArgument(String playerId) {
+    if (playerId.trim().isEmpty) {
+      throw ArgumentError.value(playerId, 'playerId', 'Cannot be empty.');
+    }
+  }
+
+  static void _validateVolume(double volume) {
+    if (!volume.isFinite || volume < 0 || volume > 1) {
+      throw ArgumentError.value(volume, 'volume', 'Must be between 0 and 1.');
+    }
+  }
+
+  static void _validateDuration(Duration duration) {
+    if (duration.isNegative) {
+      throw ArgumentError.value(duration, 'duration', 'Cannot be negative.');
+    }
+  }
 
   /// Traza informativa: solo se emite en modo debug para no ensuciar los logs
   /// en release (estas trazas se disparan en cada operación de audio). Los
@@ -398,8 +656,10 @@ class AudioInApp with WidgetsBindingObserver {
     final source = _sources[playerId];
     if (source == null) return;
     // Solapado: cada disparo crea una voz nueva (no se reinicia la anterior).
-    final handle =
-        SoLoud.instance.play(source, volume: _volumes[playerId] ?? 1.0);
+    final handle = SoLoud.instance.play(
+      source,
+      volume: _volumes[playerId] ?? 1.0,
+    );
     _determinedHandles[playerId] = handle;
   }
 
@@ -416,8 +676,11 @@ class AudioInApp with WidgetsBindingObserver {
       return;
     }
     // No hay voz viva (nunca sonó o terminó): creamos una nueva en loop.
-    final handle = SoLoud.instance
-        .play(source, volume: _volumes[playerId] ?? 1.0, looping: true);
+    final handle = SoLoud.instance.play(
+      source,
+      volume: _volumes[playerId] ?? 1.0,
+      looping: true,
+    );
     _bgHandles[playerId] = handle;
   }
 }

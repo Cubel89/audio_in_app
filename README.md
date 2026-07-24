@@ -109,10 +109,90 @@ if (!stillPlaying) {
 }
 ```
 
+### Background channels (crossfade)
+
+Since 4.2.0 you can group background audio into **logical channels**. A channel
+plays **one track at a time** and **crossfades** smoothly when you switch tracks —
+ideal for game music that reacts to state (calm / tension / danger) or for ambient
+weather that changes without an abrupt cut. Each channel is backed by a real
+flutter_soloud mixing bus, so its master volume and fades are handled natively.
+
+This is fully additive: the existing API (`play`, `stop`, `stopBackground`,
+`setVol`) is unchanged. Channels are a separate, opt-in layer.
+
+1 - Create a channel once (idempotent; calling it again just updates its volume):
+
+```dart
+await _audioInApp.createChannel(channelId: 'music', volume: 0.8);
+```
+
+2 - Play a cached **background** track into the channel. With no transition it
+switches instantly; with a `transitionDuration` the outgoing and incoming tracks
+crossfade:
+
+```dart
+// Instant.
+await _audioInApp.playChannel(channelId: 'music', playerId: 'calm');
+
+// 2-second crossfade to another track.
+await _audioInApp.playChannel(
+  channelId: 'music',
+  playerId: 'tension',
+  transitionDuration: const Duration(seconds: 2),
+);
+```
+
+The returned `Future` completes once the transition is safely started, **not** after
+the whole fade. Rapid changes (calm → tension → danger) are handled correctly: only
+the last requested track survives and the others are cleaned up.
+
+3 - Master volume of the channel, without cancelling any ongoing crossfade:
+
+```dart
+await _audioInApp.setChannelVolume(channelId: 'music', volume: 0.5);
+```
+
+4 - Pause / resume the whole channel (composes with the automatic
+background/foreground pause):
+
+```dart
+await _audioInApp.pauseChannel(channelId: 'music');
+await _audioInApp.resumeChannel(channelId: 'music');
+```
+
+5 - Stop the channel. With a `fadeOutDuration` the tracks fade out; the channel
+stays reusable afterwards:
+
+```dart
+await _audioInApp.stopChannel(
+  channelId: 'music',
+  fadeOutDuration: const Duration(milliseconds: 800),
+);
+```
+
+6 - Queries:
+
+```dart
+final String? active = _audioInApp.activePlayerIdInChannel('music'); // current target or null
+final bool playing = _audioInApp.isChannelPlaying('music');
+final bool paused = _audioInApp.isChannelPaused('music');
+```
+
+Notes:
+
+- Only cached **background** audio can be played into a channel.
+- The per-track volume set with `setVol(playerId, v)` still applies inside a channel;
+  the channel volume and the track volume multiply together.
+- `stop`, `stopBackground(playerId:)`, `setVol` and `isPlaying` also reach voices
+  playing inside channels, so the same `playerId` can safely play both as a plain
+  background and inside a channel at the same time.
+- Invalid arguments (empty id, volume outside `0..1`, negative duration) throw
+  `ArgumentError`; engine/operational errors return `false`.
+
 
 ### Example
 
-There is a basic example in the [example](https://github.com/Cubel89/audio_in_app/tree/4.1.0/example) folder of the project.
+There is a basic example in the [example](https://github.com/Cubel89/audio_in_app/tree/Developer/example) folder of the project.
 <br>
 But here we add a quick example based on the example that is in the project.
 

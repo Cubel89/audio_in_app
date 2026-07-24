@@ -53,6 +53,62 @@ class _MainActivityState extends State<MainActivity> {
     });
   }
 
+  // --- Demo de canales de fondo (crossfade), nuevo en 4.2.0 ---
+
+  static const String _channelId = 'music';
+  bool _channelReady = false;
+  String _channelStatus = 'channel not created';
+
+  /// Crea el canal exclusivo una sola vez. Un canal reproduce una pista a la
+  /// vez y hace crossfade entre ellas.
+  Future<void> _createChannel() async {
+    final ok = await _audioInApp.createChannel(
+      channelId: _channelId,
+      volume: 0.8,
+    );
+    setState(() => _channelReady = ok);
+    _refreshChannelStatus();
+  }
+
+  /// Reproduce [playerId] en el canal. Si ya sonaba otra pista, se cruzan
+  /// durante [transition].
+  Future<void> _playInChannel(String playerId, Duration transition) async {
+    await _audioInApp.playChannel(
+      channelId: _channelId,
+      playerId: playerId,
+      transitionDuration: transition,
+    );
+    _refreshChannelStatus();
+  }
+
+  Future<void> _pauseChannel() async {
+    await _audioInApp.pauseChannel(channelId: _channelId);
+    _refreshChannelStatus();
+  }
+
+  Future<void> _resumeChannel() async {
+    await _audioInApp.resumeChannel(channelId: _channelId);
+    _refreshChannelStatus();
+  }
+
+  Future<void> _stopChannel() async {
+    await _audioInApp.stopChannel(
+      channelId: _channelId,
+      fadeOutDuration: const Duration(milliseconds: 800),
+    );
+    _refreshChannelStatus();
+  }
+
+  void _refreshChannelStatus() {
+    final active = _audioInApp.activePlayerIdInChannel(_channelId);
+    final playing = _audioInApp.isChannelPlaying(_channelId);
+    final paused = _audioInApp.isChannelPaused(_channelId);
+    setState(() {
+      _channelStatus =
+          'active: ${active ?? '—'} · playing: $playing · paused: $paused';
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -100,6 +156,75 @@ class _MainActivityState extends State<MainActivity> {
                 key: const Key('btn_stop_all_bg'),
                 onPressed: () => _audioInApp.stopBackground(),
                 child: const Text('Stop ALL backgrounds'),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Background channels section (crossfade) — new in 4.2.0
+              const Text(
+                'Background Channels (crossfade)',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'A channel plays ONE track at a time and crossfades between '
+                'them. Create it once, then play tracks into it:',
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _channelStatus,
+                key: const Key('txt_channel_status'),
+                style: const TextStyle(fontStyle: FontStyle.italic),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton(
+                key: const Key('btn_channel_create'),
+                onPressed: _createChannel,
+                child: const Text('Create channel'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                key: const Key('btn_channel_play_intro1'),
+                onPressed: _channelReady
+                    ? () => _playInChannel('intro1', Duration.zero)
+                    : null,
+                child: const Text('Play intro 1 (instant)'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                key: const Key('btn_channel_crossfade_intro2'),
+                onPressed: _channelReady
+                    ? () =>
+                          _playInChannel('intro2', const Duration(seconds: 2))
+                    : null,
+                child: const Text('Crossfade to intro 2 (2s)'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                key: const Key('btn_channel_crossfade_intro1'),
+                onPressed: _channelReady
+                    ? () =>
+                          _playInChannel('intro1', const Duration(seconds: 2))
+                    : null,
+                child: const Text('Crossfade back to intro 1 (2s)'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                key: const Key('btn_channel_pause'),
+                onPressed: _channelReady ? _pauseChannel : null,
+                child: const Text('Pause channel'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                key: const Key('btn_channel_resume'),
+                onPressed: _channelReady ? _resumeChannel : null,
+                child: const Text('Resume channel'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton(
+                key: const Key('btn_channel_stop'),
+                onPressed: _channelReady ? _stopChannel : null,
+                child: const Text('Stop channel (fade 0.8s)'),
               ),
 
               const SizedBox(height: 24),
